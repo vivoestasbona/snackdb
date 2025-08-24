@@ -1,0 +1,28 @@
+/* app/globals.css */
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+
+:root {
+  --container-max: 980px; /* 모바일~태블릿 기본 */
+}
+
+/* 1080p 모니터용 (1920px 화면에 맞춤) */
+@media (min-width: 1280px) {
+  :root { --container-max: 1180px; }  /* 또는 1200px */
+}
+
+/* 1440p 모니터 이상 */
+@media (min-width: 1440px) {
+  :root { --container-max: 1280px; }
+}
+
+/* 4K 모니터 이상 */
+@media (min-width: 1680px) {
+  :root { --container-max: 1440px; }
+}
+
+.container {
+  max-width: var(--container-max);
+  margin: 0 auto;
+  padding: 16px;
+}
