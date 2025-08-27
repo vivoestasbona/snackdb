@@ -4,7 +4,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { getSupabaseClient } from "@/lib/supabaseClient";
+import { getSupabaseClient } from "@shared/api/supabaseClient";
 
 export default function SnackDetail() {
   const { id } = useParams();

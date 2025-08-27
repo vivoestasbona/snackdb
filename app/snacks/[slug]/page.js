@@ -1,15 +1,15 @@
 // app/snacks/[slug]/page.jsx
 export const dynamic = "force-dynamic"; // 미리보기 즉시 반영용
 
-import RadarChart from "@/components/RadarChart";
-import RadarWithUser from "@/components/RadarWithUser";
-import LikeButton from "@/components/LikeButton";
-import OneLiners from "@/components/OneLiners";
-import ReviewControls from "@/components/ReviewControls";
-import AdminPreview from "@/components/AdminPreview";
+import RadarChart from "@features/rate-snack/ui/RadarChart";
+import RadarWithUser from "@features/rate-snack/ui/RadarWithUser";
+import LikeButton from "@features/like-snack/ui/LikeButton";
+import OneLiners from "@entities/review/ui/OneLiners";
+import ReviewControls from "@features/manage-review/ui/ReviewControls";
+import AdminPreview from "@widgets/snack-preview/ui/AdminPreview";
 import { createClient } from "@supabase/supabase-js";
 import { permanentRedirect } from "next/navigation";
-import { STAT_SLASH } from "@/lib/statLabels";
+import { STAT_SLASH } from "@shared/lib/statLabels";
 
 function supabaseAnon() {
   return createClient(

@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { getSupabaseClient } from "@/lib/supabaseClient";
+import { getSupabaseClient } from "@shared/api/supabaseClient";
 
 export default function SnackEdit() {
   const { id } = useParams();

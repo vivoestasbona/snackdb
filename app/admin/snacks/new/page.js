@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getSupabaseClient } from "@/lib/supabaseClient";
+import { getSupabaseClient } from "@shared/api/supabaseClient";
 
 export default function SnackCreatePage() {
   const router = useRouter();
