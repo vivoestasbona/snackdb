@@ -51,12 +51,23 @@ export async function getBySlugOrId(slugOrId) {
 
   if (!snack) return { snack: null, avg: null };
 
-  const { data: rows } = await sb
-    .from("snack_scores")
-    .select("tasty, value, plenty, clean, addictive")
-    .eq("snack_id", snack.id);
+  // SQL 뷰에서 평균/카운트를 한 번에 가져옴
+  const { data: avgRow, error: avgErr } = await sb
+    .from("snack_scores_avg")
+    .select("avg_tasty, avg_value, avg_plenty, avg_clean, avg_addictive, review_count")
+    .eq("snack_id", snack.id)
+    .maybeSingle();
+  if (avgErr) console.error("[snack_scores_avg] error:", avgErr);
 
-  const { calcAverageFromRows } = await import("@features/rate-snack/model/calcStats");
-  const avg = calcAverageFromRows(rows);
+  const avg = avgRow
+    ? {
+        tasty:     avgRow.avg_tasty ?? 0,
+        value:     avgRow.avg_value ?? 0,
+        plenty:    avgRow.avg_plenty ?? 0,
+        clean:     avgRow.avg_clean ?? 0,
+        addictive: avgRow.avg_addictive ?? 0,
+        count:     avgRow.review_count ?? 0,
+      }
+    : null;
   return { snack, avg };
 }

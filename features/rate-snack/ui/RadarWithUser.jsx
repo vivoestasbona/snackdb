@@ -28,13 +28,22 @@ export default function RadarWithUser({ snackId, avg: initialAvg }) {
   }, [sb, snackId]);
 
   const recomputeAvg = useCallback(async () => {
-    const { data: rows, error } = await sb
-      .from("snack_scores")
-      .select("tasty,value,plenty,clean,addictive")
-      .eq("snack_id", snackId);
-
+    const { data, error } = await sb
+      .from("snack_scores_avg")
+      .select("avg_tasty, avg_value, avg_plenty, avg_clean, avg_addictive, review_count")
+      .eq("snack_id", snackId)
+      .maybeSingle();
     if (error) { console.error("[avg recompute]", error.message); return; }
-    const next = calcAverageFromRows(rows) || { tasty:0, value:0, plenty:0, clean:0, addictive:0, count:0 };
+    const next = data
+      ? {
+          tasty: data.avg_tasty ?? 0,
+          value: data.avg_value ?? 0,
+          plenty: data.avg_plenty ?? 0,
+          clean: data.avg_clean ?? 0,
+          addictive: data.avg_addictive ?? 0,
+          count: data.review_count ?? 0,
+        }
+      : { tasty:0, value:0, plenty:0, clean:0, addictive:0, count:0 };
     if (mounted.current) setAvg(next);
   }, [sb, snackId]);
 
