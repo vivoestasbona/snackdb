@@ -1,11 +1,10 @@
 // entities/review/ui/ReviewForm.jsx
 "use client";
 import { useState } from "react";
-import { getSupabaseClient } from "@shared/api/supabaseClient";
+import { saveReviewAndScores, deleteMyReviewAndScores } from "@entities/review/model"; 
 import { STAT_FIELDS as FIELDS } from "@shared/lib/statLabels";
 
 export default function ReviewForm({ snackId }) {
-  const sb = getSupabaseClient();
   // 기본값은 전부 null (미선택)
   const [scores, setScores] = useState({ tasty:null, value:null, plenty:null, clean:null, addictive:null });
   const [body, setBody]   = useState("");
@@ -18,38 +17,18 @@ export default function ReviewForm({ snackId }) {
     if (busy) return;
     setBusy(true);
 
-    const { data: sess } = await sb.auth.getSession();
-    const uid = sess?.session?.user?.id;
-    if (!uid) { alert("로그인이 필요합니다."); setBusy(false); return; }
-
-    const anyScore = Object.values(scores).some(v => typeof v === "number");
-    const hasText  = body.trim().length > 0;
-
-    if (!anyScore && !hasText) {
-      alert("점수 항목 중 최소 1개를 선택하거나, 한줄평을 입력해주세요.");
+    try {
+      await saveReviewAndScores({ snackId, scores, body });
+    } catch(e) {
+      alert(e.message || "저장 실패");
       setBusy(false);
       return;
-    }
-
-    if (anyScore) {
-      const up = await sb.from("snack_scores").upsert({ snack_id:snackId, user_id:uid, ...scores });
-      if (up.error) { alert("점수 저장 실패: " + up.error.message); setBusy(false); return; }
-    }
-
-    if (hasText) {
-      const ins = await sb.from("snack_reviews").insert({ snack_id:snackId, user_id:uid, body: body.trim() });
-      if (ins.error) { alert("한줄평 저장 실패: " + ins.error.message); setBusy(false); return; }
     }
 
     // 폼 리셋
     setScores({ tasty:null, value:null, plenty:null, clean:null, addictive:null });
     setBody("");
     setBusy(false);
-
-    // 갱신 이벤트(레이더/한줄평 새로고침)
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("snack:review-updated", { detail: { snackId } }));
-    }
   }
 
   async function removeMine(){
@@ -58,25 +37,17 @@ export default function ReviewForm({ snackId }) {
     if (!ok) return;
     setBusy(true);
 
-    const { data: sess } = await sb.auth.getSession();
-    const uid = sess?.session?.user?.id;
-    if (!uid) { alert("로그인이 필요합니다."); setBusy(false); return; }
-
-    const delReviews = sb.from("snack_reviews").delete().eq("snack_id", snackId).eq("user_id", uid);
-    const delScores  = sb.from("snack_scores").delete().eq("snack_id", snackId).eq("user_id", uid);
-    const [r1, r2] = await Promise.all([delReviews, delScores]);
-    if (r1.error || r2.error) {
-      alert("삭제 실패: " + (r1.error?.message || r2.error?.message));
-      setBusy(false); return;
+    try {
+      await deleteMyReviewAndScores({ snackId });
+    } catch(e) {
+      alert(e.message || "삭제 실패");
+      setBusy(false);
+      return;
     }
 
     setScores({ tasty:null, value:null, plenty:null, clean:null, addictive:null });
     setBody("");
     setBusy(false);
-
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("snack:review-updated", { detail: { snackId } }));
-    }
   }
 
   return (

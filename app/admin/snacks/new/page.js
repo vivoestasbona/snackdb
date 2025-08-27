@@ -4,6 +4,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@shared/api/supabaseClient";
+import { uploadFileToStorage } from "@features/snack-create/model/uploadFileToStorage";
+import { createSnack } from "@features/snack-create/model/createSnack";
 
 export default function SnackCreatePage() {
   const router = useRouter();
@@ -113,28 +115,9 @@ export default function SnackCreatePage() {
       const user = s?.session?.user;
       if (!user) throw new Error("로그인이 필요합니다.");
 
-      // 유효성
-      const n = (name || "").trim();
-      const b = (brand || "").trim();
-      if (!n) throw new Error("이름은 필수입니다.");
-      if (n.length > 80) throw new Error("이름은 80자 이하로 입력하세요.");
-      if (b.length > 80) throw new Error("브랜드는 80자 이하로 입력하세요.");
       if (!file) throw new Error("이미지 파일을 업로드해 주세요.");
-
-      // 업로드 → 저장용 경로(path)
-      const imagePath = await uploadFileToStorage(client, user.id, file);
-
-      // DB 저장 (비공개 버킷: image_url 대신 image_path 보관)
-      const { error } = await client.from("snacks").insert([{
-        name: n,
-        brand: b || null,
-        image_path: imagePath,   // ← 중요
-        created_by: user.id,
-      }]);
-      if (error) {
-        if (error.code === "23505") throw new Error("이미 동일한 이름/브랜드의 과자가 있습니다.");
-        throw error;
-      }
+      const imagePath = await uploadFileToStorage({ file, userId: user.id });
+      await createSnack({ name, brand, imagePath, userId: user.id });
 
       router.replace("/admin/snacks");
     } catch (e) {
