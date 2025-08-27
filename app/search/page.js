@@ -4,8 +4,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { getSupabaseClient } from "@/lib/supabaseClient";
-import { promptLogin } from "@/lib/loginPrompt";
+import { getSupabaseClient } from "@shared/api/supabaseClient";
+import { promptLogin } from "@entities/user/model/loginPrompt";
 
 const PAGE_SIZE = 20;
 

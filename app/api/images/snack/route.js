@@ -1,6 +1,6 @@
 // app/api/images/snack/route.js
 import { NextResponse } from "next/server";
-import { getSupabaseAdmin } from "@/lib/supabaseAdmin"; // (이전 단계에서 만든 서버용 클라이언트)
+import { getSupabaseAdmin } from "@shared/api/supabaseAdmin"; // (이전 단계에서 만든 서버용 클라이언트)
 
 export async function GET(req) {
   try {

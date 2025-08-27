@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { getSupabaseClient } from "@/lib/supabaseClient";
+import { getSupabaseClient } from "@shared/api/supabaseClient";
 
 const PAGE_SIZE = 20;
 const VIS_COL = "is_public"; // 공개/비공개 컬럼

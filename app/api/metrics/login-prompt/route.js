@@ -1,6 +1,6 @@
 // app/api/metrics/login-prompt/route.js
 import { NextResponse } from "next/server";
-import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { getSupabaseAdmin } from "@shared/api/supabaseAdmin";
 
 export async function POST(req) {
   const sb = getSupabaseAdmin();

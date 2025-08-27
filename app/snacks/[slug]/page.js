@@ -1,123 +1,21 @@
 // app/snacks/[slug]/page.jsx
 export const dynamic = "force-dynamic"; // 미리보기 즉시 반영용
 
-import RadarChart from "@/components/RadarChart";
-import RadarWithUser from "@/components/RadarWithUser";
-import LikeButton from "@/components/LikeButton";
-import OneLiners from "@/components/OneLiners";
-import ReviewControls from "@/components/ReviewControls";
-import AdminPreview from "@/components/AdminPreview";
-import { createClient } from "@supabase/supabase-js";
-import { permanentRedirect } from "next/navigation";
-import { STAT_SLASH } from "@/lib/statLabels";
-
-function supabaseAnon() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    { auth: { persistSession: false } }
-  );
-}
-
-async function getBySlugOrId(slugOrId) {
-  const sb = supabaseAnon();
-
-  // URL 파라미터 디코딩 + 가벼운 정규화
-  const key = decodeURIComponent(slugOrId || "");
-  const normalized = key
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/(^-+|-+$)/g, "");
-
-  // 1) 슬러그 정확 매칭
-  let { data: snack, error } = await sb
-    .from("snacks")
-    .select("id, name, brand, image_path, slug")
-    .eq("slug", key)
-    .eq("is_public", true)
-    .maybeSingle();
-  if (error) console.error("[snacks by slug] error:", error);
-
-  // 2) 정확 매칭 없으면 정규화 값으로 한 번 더
-  if (!snack && normalized !== key) {
-    const { data: alt, error: e2 } = await sb
-      .from("snacks")
-      .select("id, name, brand, image_path, slug")
-      .eq("slug", normalized)
-      .eq("is_public", true)
-      .maybeSingle();
-    if (e2) console.error("[snacks by normalized slug] error:", e2);
-    if (alt) snack = alt;
-  }
-
-  // 3) UUID로 접근한 경우 정규 슬러그로 리다이렉트
-  if (!snack && /^[0-9a-f-]{36}$/i.test(key)) {
-    const { data: byId } = await sb
-      .from("snacks")
-      .select("id, name, brand, image_path, slug")
-      .eq("id", key)
-      .eq("is_public", true)
-      .maybeSingle();
-    if (byId?.slug) permanentRedirect(`/snacks/${encodeURIComponent(byId.slug)}`);
-  }
-
-  if (!snack) return { snack: null, avg: null };
-
-  // 평균 스탯(SSR)
-  const { data: rows } = await sb
-    .from("snack_scores")
-    .select("tasty, value, plenty, clean, addictive")
-    .eq("snack_id", snack.id);
-
-  let avg = null;
-  if (rows?.length) {
-    const s = rows.reduce(
-      (a, r) => ({
-        tasty: a.tasty + r.tasty,
-        value: a.value + r.value,
-        plenty: a.plenty + r.plenty,
-        clean: a.clean + r.clean,
-        addictive: a.addictive + r.addictive,
-      }),
-      { tasty: 0, value: 0, plenty: 0, clean: 0, addictive: 0 }
-    );
-    const n = rows.length;
-    avg = {
-      tasty: s.tasty / n,
-      value: s.value / n,
-      plenty: s.plenty / n,
-      clean: s.clean / n,
-      addictive: s.addictive / n,
-      count: n,
-    };
-  }
-
-  return { snack, avg };
-}
+import RadarChart from "@features/rate-snack/ui/RadarChart";
+import RadarWithUser from "@features/rate-snack/ui/RadarWithUser";
+import LikeButton from "@features/like-snack/ui/LikeButton";
+import OneLiners from "@entities/review/ui/OneLiners";
+import ReviewControls from "@features/manage-review/ui/ReviewControls";
+import AdminPreview from "@widgets/snack-preview/ui/AdminPreview";
+import { getSupabaseServer } from "@shared/api/supabase/server";
+import { getBySlugOrId } from "@entities/snack/model/getBySlugOrId";
+import { snackMetadata, snackJsonLd } from "@shared/lib/seo/snackSeo";
 
 export async function generateMetadata({ params }) {
   const { slug } = await params;               //  async 프록시에서 안전 추출
   const { snack, avg } = await getBySlugOrId(slug);
   if (!snack) return { title: "SnackDB" };
-
-  const title = `${snack.brand ? snack.brand + " " : ""}${snack.name} | SnackDB`;
-  const desc = `${snack.brand || ""} ${snack.name}의 ${STAT_SLASH} 평가와 한줄평.`;
-  const img = snack.image_path
-    ? `${process.env.NEXT_PUBLIC_SITE_URL}/api/images/snack?path=${encodeURIComponent(
-        snack.image_path
-      )}`
-    : undefined;
-  const canonical = `${process.env.NEXT_PUBLIC_SITE_URL}/snacks/${encodeURIComponent(
-    snack.slug
-  )}`;
-
-  return {
-    title,
-    description: desc,
-    alternates: { canonical },
-    openGraph: { title, description: desc, images: img ? [img] : [] },
-    twitter: { card: "summary_large_image", title, description: desc, images: img ? [img] : [] },
-  };
+  return snackMetadata(snack, avg);
 }
 
 export default async function Page({ params, searchParams }) {
@@ -144,26 +42,7 @@ export default async function Page({ params, searchParams }) {
     : null;
   const { q = "" } = await searchParams;
 
-  // JSON-LD (Product + AggregateRating)
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Product",
-    name: snack.name,
-    brand: snack.brand || undefined,
-    image: imgUrl || undefined,
-    ...(avg
-      ? {
-          aggregateRating: {
-            "@type": "AggregateRating",
-            ratingValue: (
-              (avg.tasty + avg.value + avg.plenty + avg.clean + avg.addictive) /
-              5
-            ).toFixed(1),
-            reviewCount: avg.count,
-          },
-        }
-      : {}),
-  };
+  const jsonLd = snackJsonLd(snack, avg);
 
   return (
     <section className="snack-wrap">
