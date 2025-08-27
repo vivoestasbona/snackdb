@@ -1,6 +1,7 @@
 // features/rate-snack/ui/RadarChart.jsx
 // 서버 컴포넌트로 사용 가능 ("use client" 없음, styled-jsx 미사용)
 import { STAT_KEYS as keys, STAT_LABELS as labels } from "@shared/lib/statLabels";
+import { calcOverall } from "@features/rate-snack/model/calcStats";
 
 export default function RadarChart({
   values = { tasty:0, value:0, plenty:0, clean:0, addictive:0, count: undefined }, // 평균 값 + (선택)이용자 수
@@ -29,9 +30,7 @@ export default function RadarChart({
     return `${cx + Math.cos(a)*r*ratio},${cy + Math.sin(a)*r*ratio}`;
   }).join(" ");
 
-  // 전체 평균(차트 하단 표시)
-  const overall =
-    keys.reduce((s, k) => s + (typeof values?.[k] === "number" ? values[k] : 0), 0) / keys.length;
+  const overall = calcOverall(values);
 
   // 텍스트 정렬 헬퍼
   const anchorFor = (a) => {

@@ -51,34 +51,12 @@ export async function getBySlugOrId(slugOrId) {
 
   if (!snack) return { snack: null, avg: null };
 
-  // 평균 스탯
   const { data: rows } = await sb
     .from("snack_scores")
     .select("tasty, value, plenty, clean, addictive")
     .eq("snack_id", snack.id);
 
-  let avg = null;
-  if (rows?.length) {
-    const sum = rows.reduce(
-      (a, r) => ({
-        tasty: a.tasty + r.tasty,
-        value: a.value + r.value,
-        plenty: a.plenty + r.plenty,
-        clean: a.clean + r.clean,
-        addictive: a.addictive + r.addictive,
-      }),
-      { tasty: 0, value: 0, plenty: 0, clean: 0, addictive: 0 }
-    );
-    const n = rows.length;
-    avg = {
-      tasty: sum.tasty / n,
-      value: sum.value / n,
-      plenty: sum.plenty / n,
-      clean: sum.clean / n,
-      addictive: sum.addictive / n,
-      count: n,
-    };
-  }
-
+  const { calcAverageFromRows } = await import("@features/rate-snack/model/calcStats");
+  const avg = calcAverageFromRows(rows);
   return { snack, avg };
 }

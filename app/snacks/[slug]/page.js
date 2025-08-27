@@ -9,31 +9,13 @@ import ReviewControls from "@features/manage-review/ui/ReviewControls";
 import AdminPreview from "@widgets/snack-preview/ui/AdminPreview";
 import { getSupabaseServer } from "@shared/api/supabase/server";
 import { getBySlugOrId } from "@entities/snack/model/getBySlugOrId";
-import { STAT_SLASH } from "@shared/lib/statLabels";
+import { snackMetadata, snackJsonLd } from "@shared/lib/seo/snackSeo";
 
 export async function generateMetadata({ params }) {
   const { slug } = await params;               //  async 프록시에서 안전 추출
   const { snack, avg } = await getBySlugOrId(slug);
   if (!snack) return { title: "SnackDB" };
-
-  const title = `${snack.brand ? snack.brand + " " : ""}${snack.name} | SnackDB`;
-  const desc = `${snack.brand || ""} ${snack.name}의 ${STAT_SLASH} 평가와 한줄평.`;
-  const img = snack.image_path
-    ? `${process.env.NEXT_PUBLIC_SITE_URL}/api/images/snack?path=${encodeURIComponent(
-        snack.image_path
-      )}`
-    : undefined;
-  const canonical = `${process.env.NEXT_PUBLIC_SITE_URL}/snacks/${encodeURIComponent(
-    snack.slug
-  )}`;
-
-  return {
-    title,
-    description: desc,
-    alternates: { canonical },
-    openGraph: { title, description: desc, images: img ? [img] : [] },
-    twitter: { card: "summary_large_image", title, description: desc, images: img ? [img] : [] },
-  };
+  return snackMetadata(snack, avg);
 }
 
 export default async function Page({ params, searchParams }) {
@@ -60,26 +42,7 @@ export default async function Page({ params, searchParams }) {
     : null;
   const { q = "" } = await searchParams;
 
-  // JSON-LD (Product + AggregateRating)
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Product",
-    name: snack.name,
-    brand: snack.brand || undefined,
-    image: imgUrl || undefined,
-    ...(avg
-      ? {
-          aggregateRating: {
-            "@type": "AggregateRating",
-            ratingValue: (
-              (avg.tasty + avg.value + avg.plenty + avg.clean + avg.addictive) /
-              5
-            ).toFixed(1),
-            reviewCount: avg.count,
-          },
-        }
-      : {}),
-  };
+  const jsonLd = snackJsonLd(snack, avg);
 
   return (
     <section className="snack-wrap">
