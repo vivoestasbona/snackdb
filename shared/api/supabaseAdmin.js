@@ -1,4 +1,4 @@
-// lib/supabaseAdmin.js
+// shared/api/supabaseAdmin.js
 import { createClient } from "@supabase/supabase-js";
 
 export function getSupabaseAdmin() {

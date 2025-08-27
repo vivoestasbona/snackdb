@@ -1,4 +1,4 @@
-// components/Navbar.jsx
+// widgets/navbar/ui/Navbar.jsx
 "use client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";

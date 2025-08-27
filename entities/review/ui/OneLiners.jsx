@@ -1,4 +1,4 @@
-// components/OneLiners.jsx
+// entities/review/ui/OneLiners.jsx
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { getSupabaseClient } from "@shared/api/supabaseClient";

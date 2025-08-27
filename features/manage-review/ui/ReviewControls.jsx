@@ -1,4 +1,4 @@
-// components/ReviewControls.jsx
+// features/manage-review/ui//ReviewControls.jsx
 "use client";
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@shared/api/supabaseClient";

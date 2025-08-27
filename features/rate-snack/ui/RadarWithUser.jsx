@@ -1,3 +1,5 @@
+// features/rate-snack/ui/RadarWithUser.jsx
+
 "use client";
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@shared/api/supabaseClient";

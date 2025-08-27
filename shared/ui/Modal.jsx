@@ -1,4 +1,4 @@
-// components/Modal.jsx
+// shared/ui/Modal.jsx
 "use client";
 import { useEffect } from "react";
 import { createPortal } from "react-dom";

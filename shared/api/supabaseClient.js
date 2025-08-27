@@ -1,4 +1,4 @@
-// lib/supabaseClient.js
+// shared/api/supabaseClient.js
 "use client";
 
 import { createClient } from "@supabase/supabase-js";

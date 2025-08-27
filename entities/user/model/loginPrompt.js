@@ -1,5 +1,5 @@
 // 어디서든 호출하면 Navbar가 로그인 모달을 열도록 신호를 보냅니다.
-// lib/loginPrompt.js
+// entities/user/model/LoginPrompt.jsx
 export function promptLogin(detail = {}) {
   if (typeof window === "undefined") return;
 

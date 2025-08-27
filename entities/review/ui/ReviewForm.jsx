@@ -1,4 +1,4 @@
-// components/ReviewForm.jsx
+// entities/review/ui/ReviewForm.jsx
 "use client";
 import { useState } from "react";
 import { getSupabaseClient } from "@shared/api/supabaseClient";

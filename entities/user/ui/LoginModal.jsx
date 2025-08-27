@@ -1,4 +1,4 @@
-// components/LoginModal.jsx
+// entities/user/ui/LoginModal.jsx
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { getSupabaseClient } from "@shared/api/supabaseClient";

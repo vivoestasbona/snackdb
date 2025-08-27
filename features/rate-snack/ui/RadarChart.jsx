@@ -1,4 +1,4 @@
-// components/RadarChart.jsx
+// features/rate-snack/ui/RadarChart.jsx
 // 서버 컴포넌트로 사용 가능 ("use client" 없음, styled-jsx 미사용)
 import { STAT_KEYS as keys, STAT_LABELS as labels } from "@shared/lib/statLabels";
 

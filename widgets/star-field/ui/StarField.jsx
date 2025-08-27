@@ -1,4 +1,4 @@
-// components/StarField.jsx
+// widgets/star-field/ui/StarField.jsx
 "use client";
 import { useState } from "react";
 

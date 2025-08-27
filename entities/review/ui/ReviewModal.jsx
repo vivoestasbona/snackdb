@@ -1,4 +1,4 @@
-// components/ReviewModal.jsx
+// entities/review/ui/ReviewModal.jsx
 "use client";
 import { useState, useEffect } from "react";
 import { getSupabaseClient } from "@shared/api/supabaseClient";

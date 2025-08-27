@@ -1,4 +1,4 @@
-// components/AdminPreview.jsx
+// widgets/snack-preview/ui/AdminPreview.jsx
 "use client";
 
 import { useEffect, useState } from "react";

@@ -1,3 +1,5 @@
+// shared/lib/statLabel.js
+
 // 평가 항목(키/라벨) 공용 상수
 export const STAT_KEYS   = ["tasty", "value", "plenty", "clean", "addictive"];
 export const STAT_LABELS = ["맛있음", "가격 만족도", "양많음", "깔끔함", "중독성"];

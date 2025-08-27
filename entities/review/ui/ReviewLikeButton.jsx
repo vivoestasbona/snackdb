@@ -1,4 +1,4 @@
-// components/ReviewLikeButton.jsx
+// entities/review/ui/ReviewLikeButton.jsx
 "use client";
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@shared/api/supabaseClient";
