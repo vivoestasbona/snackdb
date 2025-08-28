@@ -54,11 +54,33 @@ export default function LikeButton({ snackId }) {
   }
 
   return (
-    <button className={`like ${liked?'on':''}`} onClick={toggle} aria-pressed={liked}>
-      ♥ 좋아요 {count}
+    <button
+      type="button"
+      className={`like ${liked ? "on" : ""}`}
+      onClick={(e) => { e.stopPropagation(); toggle(); }}  // 링크로 전파 방지
+      aria-pressed={liked}
+      aria-label={`좋아요 ${count}개`}
+    >
+      <span className="icon" aria-hidden>♥</span>
+      <span className="count">{count}</span>
       <style jsx>{`
-        .like { padding:8px 12px; border:1px solid #ddd; border-radius:8px; background:#fff; cursor:pointer; }
-        .like.on { border-color:#f88; background:#ffeef0; }
+        .like {
+          /* 버튼 리셋 */
+          background: transparent;
+          border: 0;
+          padding: 0;
+          margin: 0;
+          font: inherit;
+          line-height: 1;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          cursor: pointer;
+        }
+        .icon { font-size: 16px; }
+        .like.on .icon { color: #e55; }
+        .like:not(.on):hover .icon { color: #e55; }
+        .count { font-weight: 600; }
       `}</style>
     </button>
   );

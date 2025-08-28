@@ -1,13 +1,9 @@
 // app/snacks/[slug]/page.jsx
-export const dynamic = "force-dynamic"; // 미리보기 즉시 반영용
-
-import RadarChart from "@features/rate-snack/ui/RadarChart";
+export const revalidate = 120;
 import RadarWithUser from "@features/rate-snack/ui/RadarWithUser";
 import LikeButton from "@features/like-snack/ui/LikeButton";
 import OneLiners from "@entities/review/ui/OneLiners";
-import ReviewControls from "@features/manage-review/ui/ReviewControls";
 import AdminPreview from "@widgets/snack-preview/ui/AdminPreview";
-import { getSupabaseServer } from "@shared/api/supabase/server";
 import { getBySlugOrId } from "@entities/snack/model/getBySlugOrId";
 import { snackMetadata, snackJsonLd } from "@shared/lib/seo/snackSeo";
 
@@ -48,9 +44,15 @@ export default async function Page({ params, searchParams }) {
     <section className="snack-wrap">
       <aside className="snack-left">
         {imgUrl && <img src={imgUrl} alt={snack.name} className="snack-photo" />}
-        <h1 className="snack-title">{snack.name}</h1>
+        <div className="title-row">
+          <div className="title-left">
+            <h1 className="snack-title">{snack.name}</h1>
+          </div>
+          <div className="title-right">
+            <LikeButton snackId={snack.id} />
+          </div>
+        </div>
         {snack.brand && <p className="snack-brand">{snack.brand}</p>}
-        <LikeButton snackId={snack.id} />
         {q ? (
           <a href="javascript:history.back()" className="snack-ghost">
             ← 검색으로
@@ -93,6 +95,42 @@ export default async function Page({ params, searchParams }) {
         .snack-right { display:grid; gap:12px; }
         .snack-card { background:#fff; border:1px solid #eee; border-radius:12px; padding:16px; }
         .snack-card h2 { margin:0 0 10px; font-size:18px; }
+        .title-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+        }
+
+        .title-left {
+          display: flex;
+          align-items: baseline;
+          gap: 8px;
+          flex: 1 1 auto;
+          min-width: 0;
+        }
+
+        .snack-title {
+          margin: 0;
+          font-size: 24px;
+          line-height: 1.2;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .snack-brand {
+          margin: 4px 0 8px;
+          color: #555;
+          font-size: 14px;
+        }
+
+        .title-right {
+          flex: 0 0 auto;
+          display: inline-flex;
+          align-items: center;
+        }
+
       `}</style>
     </section>
   );
