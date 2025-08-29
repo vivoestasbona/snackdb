@@ -6,6 +6,9 @@ import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@shared/api/supabaseClient";
 // import { uploadFileToStorage } from "@features/snack-create/model/uploadFileToStorage"; // ← 중복 함수 충돌 방지 위해 주석
 import { createSnack } from "@features/snack-create/model/createSnack";
+import TagInput from "@features/keywords/ui/TagInput";
+import { ensureKeywords } from "@features/keywords/model/ensureKeywords";
+import { mapKeywords } from "@features/keywords/model/mapKeywords";
 
 export default function SnackCreatePage() {
   const router = useRouter();
@@ -26,6 +29,8 @@ export default function SnackCreatePage() {
   const [flavors, setFlavors] = useState([]);           // {id,name}[]
   const [selectedFlavors, setSelectedFlavors] = useState([]); // string[] flavor_id
   const [flavorsLoading, setFlavorsLoading] = useState(true);
+
+  const [keywords, setKeywords] = useState([]); // string[] name list
 
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
@@ -185,7 +190,13 @@ export default function SnackCreatePage() {
           .from("snack_flavors_map")
           .upsert(rows, { onConflict: "snack_id,flavor_id", ignoreDuplicates: true });
         if (mapErr) throw mapErr;
-      }!  
+      }
+
+      // 키워드: 존재 확인 → 없으면 생성 → 매핑
+      if (keywords.length) {
+        const ids = await ensureKeywords(keywords);
+        await mapKeywords(snackId, ids);
+      } 
 
       router.replace("/admin/snacks");
     } catch (e) {
@@ -259,6 +270,8 @@ export default function SnackCreatePage() {
           )}
         </fieldset>
 
+        <TagInput value={keywords} onChange={setKeywords} placeholder="예: 감자, 양파, 해물…" />
+
           <label className="block">
             이미지 업로드*
             <input
@@ -301,7 +314,8 @@ export default function SnackCreatePage() {
         .fieldset { display:grid; gap:8px; }
         .chips { display:flex; flex-wrap:wrap; gap:8px; }
         .chip { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border:1px solid #ddd; border-radius:999px; }
-      `}</style>
+        .chip { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border:1px solid #ddd; border-radius:999px; }
+       `}</style>
     </section>
   );
 }

@@ -3,6 +3,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import TagInput from "@features/keywords/ui/TagInput";
+import { ensureKeywords } from "@features/keywords/model/ensureKeywords";
+import { mapKeywords } from "@features/keywords/model/mapKeywords";
 import { useParams, useRouter } from "next/navigation";
 import { getSupabaseClient } from "@shared/api/supabaseClient";
 
@@ -29,6 +32,8 @@ export default function SnackEdit() {
   const [flavors, setFlavors] = useState([]);
   const [flavorsLoading, setFlavorsLoading] = useState(true);
   const [selectedFlavors, setSelectedFlavors] = useState([]);
+
+  const [keywords, setKeywords] = useState([]); // string[] 선택된 키워드 이름
 
   function toggleFlavor(id) {
     setSelectedFlavors(prev => prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id]);
@@ -92,6 +97,23 @@ export default function SnackEdit() {
      setFlavorsLoading(false);
    })();
  }, [adminReady, client]);
+
+ // 현재 키워드 매핑 로드
+ useEffect(() => {
+   if (!adminReady || !id) return;
+   (async () => {
+     const { data: kwRows, error: kwErr } = await client
+       .from("snack_keywords_map")
+       .select("kw:snack_keywords(name)")
+       .eq("snack_id", id);
+     if (!kwErr) {
+       setKeywords(
+         (kwRows || []).map(r => r.kw?.name).filter(Boolean)
+       );
+     }
+   })();
+ }, [adminReady, id, client]);
+
 
   // 기존 데이터 불러오기 (+ type_id 포함)
   useEffect(() => {
@@ -186,6 +208,23 @@ export default function SnackEdit() {
 
       if (updErr) throw updErr;
 
+      // 확정된 칩(키워드)만 저장
+      const kwList = Array.isArray(keywords) ? keywords : [];
+
+      // --- 키워드 매핑 갱신: 모두 삭제 → 선택 반영 ---
+      const { error: delErr } = await client
+        .from("snack_keywords_map")
+        .delete()
+        .eq("snack_id", id);
+      if (delErr) throw delErr;
+
+      if (kwList.length) {
+        const ids = await ensureKeywords(kwList);
+        const inserted = await mapKeywords(id, ids);
+        // (선택) 콘솔 확인 유지
+        console.log("[kw save]", kwList, "=> ids:", ids, "inserted:", inserted);
+      }
+
       // 매핑 갱신: 기존 삭제 → 신규 삽입
       await client.from("snack_flavors_map").delete().eq("snack_id", id);
       if (selectedFlavors.length) {
@@ -263,6 +302,8 @@ export default function SnackEdit() {
             </div>
           )}
         </label>
+
+        <TagInput value={keywords} onChange={setKeywords} placeholder="예: 감자, 양파, 해물…" />
 
         <label>
           이미지 교체

@@ -83,9 +83,17 @@ export async function getBySlugOrId(slugOrId) {
     .eq("snack_id", snack.id);
   if (fErr) console.error("[snack_flavors_map] error:", fErr);
 
+  // 키워드 목록
+  const { data: kwRows, error: kwErr } = await sb
+    .from("snack_keywords_map")
+    .select("kw:snack_keywords(id,name,slug)")
+    .eq("snack_id", snack.id);
+  if (kwErr) console.error("[snack_keywords_map] error:", kwErr);
+  const keywords = (kwRows || []).map(r => r.kw).filter(Boolean);
+
   const flavors = (flavorRows || [])
     .map(r => r.flavor)
     .filter(Boolean);
 
-  return { snack, avg, flavors };
+  return { snack, avg, flavors, keywords };
 }

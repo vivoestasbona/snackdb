@@ -23,7 +23,7 @@ export default async function Page({ params, searchParams }) {
     return <AdminPreview slug={slug} />;
   }
 
-  const { snack, avg, flavors } = await getBySlugOrId(slug);
+  const { snack, avg, flavors, keywords } = await getBySlugOrId(slug);
   if (!snack) {
     return (
       <section style={{ padding: 16 }}>
@@ -58,6 +58,13 @@ export default async function Page({ params, searchParams }) {
           <div className="snack-flavors">
             {flavors.map(f => (
               <span key={f.id} className="flavor-chip">{f.name}</span>
+            ))}
+          </div>
+        )}
+        {!!(keywords && keywords.length) && (
+          <div className="snack-keywords">
+            {keywords.map(k => (
+              <span key={k.id} className="keyword-chip">{k.name}</span>
             ))}
           </div>
         )}
@@ -106,6 +113,8 @@ export default async function Page({ params, searchParams }) {
         .title-row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
         .title-left { display:flex; align-items:baseline; gap:8px; flex:1 1 auto; min-width:0; }
         .title-right { flex:0 0 auto; display:inline-flex; align-items:center; }
+        .snack-keywords { display:flex; flex-wrap:wrap; gap:6px; margin:2px 0 6px; }
+        .keyword-chip { display:inline-block; padding:4px 8px; border:1px solid #ddd; border-radius:999px; font-size:12px; background:#eef2ff; }
       `}</style>
     </section>
   );
