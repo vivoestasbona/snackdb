@@ -21,7 +21,20 @@ export default function SnackEdit() {
   const [err, setErr] = useState("");
   const [adminReady, setAdminReady] = useState(false);
 
-  // 🔐 관리자 가드: 로그인 + role=admin 아니면 홈으로
+  // 과자 종류 목록
+  const [types, setTypes] = useState([]);     // {id,name}[]
+  const [typeId, setTypeId] = useState("");   // 선택된 type_id
+  const [typesLoading, setTypesLoading] = useState(true);
+
+  const [flavors, setFlavors] = useState([]);
+  const [flavorsLoading, setFlavorsLoading] = useState(true);
+  const [selectedFlavors, setSelectedFlavors] = useState([]);
+
+  function toggleFlavor(id) {
+    setSelectedFlavors(prev => prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id]);
+  }
+
+  // 🔐 관리자 가드
   useEffect(() => {
     let mounted = true;
     async function resolve(session) {
@@ -42,14 +55,52 @@ export default function SnackEdit() {
     return () => { mounted = false; sub?.subscription?.unsubscribe?.(); };
   }, [client, router]);
 
-   // 기존 데이터 불러오기
+  // snack_types 로드
+  useEffect(() => {
+    if (!adminReady) return;
+    (async () => {
+      setTypesLoading(true);
+      const { data, error } = await client
+        .from("snack_types")
+        .select("id,name")
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true })
+        .order("name", { ascending: true });
+      if (error) {
+        setErr(error.message || "카테고리를 불러오지 못했습니다.");
+        setTypes([]);
+      } else {
+        setTypes(data || []);
+      }
+      setTypesLoading(false);
+    })();
+  }, [adminReady, client]);
+
+  // snack_flavors 로드
+ useEffect(() => {
+   if (!adminReady) return;
+   (async () => {
+     setFlavorsLoading(true);
+     const { data, error } = await client
+       .from("snack_flavors")
+       .select("id,name")
+       .eq("is_active", true)
+       .order("sort_order", { ascending: true })
+       .order("name", { ascending: true });
+     if (error) setErr(error.message || "맛 목록을 불러오지 못했습니다.");
+     else setFlavors(data || []);
+     setFlavorsLoading(false);
+   })();
+ }, [adminReady, client]);
+
+  // 기존 데이터 불러오기 (+ type_id 포함)
   useEffect(() => {
     if (!adminReady || !id) return;
     (async () => {
       setLoading(true);
       const { data, error } = await client
         .from("snacks")
-        .select("id,name,brand,image_path,created_at,is_public")
+        .select("id,name,brand,image_path,created_at,is_public,type_id")
         .eq("id", id)
         .single();
 
@@ -59,20 +110,24 @@ export default function SnackEdit() {
         return;
       }
 
-        setItem(data);
-        setName(data.name);
-        setBrand(data.brand);
+      setItem(data);
+      setName(data.name || "");
+      setBrand(data.brand || "");
+      setTypeId(data.type_id || "");
+
+      // 현재 매핑
+      const { data: maps } = await client
+        .from("snack_flavors_map")
+        .select("flavor_id")
+        .eq("snack_id", id);
+      setSelectedFlavors((maps || []).map(m => m.flavor_id));
 
       if (data.image_path) {
         const { data: signed, error: signErr } = await client
-            .storage
-            .from("snack-images")
-            .createSignedUrl(data.image_path, 60 * 60);
-        if (signErr) {
-            setImgUrl(null);
-        } else {
-            setImgUrl(signed?.signedUrl ?? null);
-        }
+          .storage
+          .from("snack-images")
+          .createSignedUrl(data.image_path, 60 * 60);
+        setImgUrl(signErr ? null : (signed?.signedUrl ?? null));
       }
       setLoading(false);
     })();
@@ -84,12 +139,16 @@ export default function SnackEdit() {
       setErr("이름은 반드시 입력해야 합니다.");
       return;
     }
+    if (!typeId) {
+      setErr("과자 종류를 선택해 주세요.");
+      return;
+    }
 
     setSaving(true);
     setErr("");
 
     try {
-      // 1. 이름 중복 검사 (자기 자신 제외)
+      // 1) 이름 중복 검사 (자기 자신 제외)
       const { data: dup } = await client
         .from("snacks")
         .select("id")
@@ -101,7 +160,7 @@ export default function SnackEdit() {
 
       let newPath = item.image_path;
 
-      // 2. 새 파일 업로드
+      // 2) 새 파일 업로드 시 교체
       if (file) {
         if (item.image_path) {
           await client.storage.from("snack-images").remove([item.image_path]);
@@ -114,21 +173,31 @@ export default function SnackEdit() {
         newPath = path;
       }
 
-      // 3. DB 업데이트
+      // 3) DB 업데이트 (type_id 포함!)
       const { error: updErr } = await client
         .from("snacks")
         .update({
           name: name.trim(),
           brand: brand.trim(),
-          image_path: newPath
+          image_path: newPath,
+          type_id: typeId,
         })
         .eq("id", id);
 
       if (updErr) throw updErr;
 
+      // 매핑 갱신: 기존 삭제 → 신규 삽입
+      await client.from("snack_flavors_map").delete().eq("snack_id", id);
+      if (selectedFlavors.length) {
+        const rows = selectedFlavors.map(fid => ({ snack_id: id, flavor_id: fid }));
+        const { error: mapErr } = await client.from("snack_flavors_map").insert(rows);
+        if (mapErr) throw mapErr;
+      }
+
+
       router.replace(`/admin/snacks/${id}`);
     } catch (e) {
-      setErr(e.message);
+      setErr(e.message || "저장 실패");
       setSaving(false);
     }
   }
@@ -157,6 +226,42 @@ export default function SnackEdit() {
             value={brand}
             onChange={(e) => setBrand(e.target.value)}
           />
+        </label>
+
+        <label>
+          과자 종류 *
+          <select
+            value={typeId}
+            onChange={(e)=>setTypeId(e.target.value)}
+            disabled={typesLoading || !types.length}
+            required
+          >
+            {types.map(t => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          맛(복수 선택 가능)
+          {flavorsLoading ? (
+            <p>맛 목록 불러오는 중…</p>
+          ) : !flavors.length ? (
+            <p>등록된 맛이 없습니다.</p>
+          ) : (
+            <div className="chips">
+              {flavors.map(f => (
+                <label key={f.id} className="chip">
+                  <input
+                    type="checkbox"
+                    checked={selectedFlavors.includes(f.id)}
+                    onChange={() => toggleFlavor(f.id)}
+                  />
+                  <span>{f.name}</span>
+                </label>
+              ))}
+            </div>
+          )}
         </label>
 
         <label>
@@ -190,10 +295,12 @@ export default function SnackEdit() {
         h1 { margin-bottom:16px; }
         .form { display:flex; flex-direction:column; gap:14px; }
         label { display:flex; flex-direction:column; gap:4px; }
-        input { padding:8px; border:1px solid #ccc; border-radius:6px; }
+        input, select { padding:8px; border:1px solid #ccc; border-radius:6px; }
         .row { display:flex; gap:8px; margin-top:12px; }
         .err { color:#c00; }
         .preview img { max-width:300px; border:1px solid #ccc; border-radius:6px; margin-top:8px; }
+        .chips { display:flex; flex-wrap:wrap; gap:8px; }
+        .chip { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border:1px solid #ddd; border-radius:999px; }
       `}</style>
     </section>
   );

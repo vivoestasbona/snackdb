@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@shared/api/supabaseClient";
-import { uploadFileToStorage } from "@features/snack-create/model/uploadFileToStorage";
+// import { uploadFileToStorage } from "@features/snack-create/model/uploadFileToStorage"; // ← 중복 함수 충돌 방지 위해 주석
 import { createSnack } from "@features/snack-create/model/createSnack";
 
 export default function SnackCreatePage() {
@@ -17,10 +17,20 @@ export default function SnackCreatePage() {
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState("");
 
+  // 과자 종류(카테고리)
+  const [types, setTypes] = useState([]);      // {id, name}[]
+  const [typeId, setTypeId] = useState("");    // 선택된 id
+  const [typesLoading, setTypesLoading] = useState(true);
+
+  // 맛 카테고리(다중 선택)
+  const [flavors, setFlavors] = useState([]);           // {id,name}[]
+  const [selectedFlavors, setSelectedFlavors] = useState([]); // string[] flavor_id
+  const [flavorsLoading, setFlavorsLoading] = useState(true);
+
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
-  // 관리자 가드 (+ INITIAL_SESSION 대응)
+  // 관리자 가드 (+ INITIAL_SESSION 대응)  
   useEffect(() => {
     let mounted = true;
     const client = getSupabaseClient();
@@ -59,7 +69,54 @@ export default function SnackCreatePage() {
     };
   }, [router]);
 
-  // 파일 미리보기
+  // snack_types 로드
+  useEffect(() => {
+    if (!authOK) return;
+    (async () => {
+      setTypesLoading(true);
+      const client = getSupabaseClient();
+      const { data, error } = await client
+        .from("snack_types")
+        .select("id,name")
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true })
+        .order("name", { ascending: true });
+      if (error) {
+        setErr(error.message || "카테고리를 불러오지 못했습니다.");
+      } else {
+        setTypes(data || []);
+        // 기본 선택: 첫 항목
+        if ((data || []).length && !typeId) setTypeId(data[0].id);
+      }
+      setTypesLoading(false);
+    })();
+  }, [authOK]); // 최초 1회
+
+  // snack_flavors 로드
+  useEffect(() => {
+    if (!authOK) return;
+    (async () => {
+      setFlavorsLoading(true);
+      const client = getSupabaseClient();
+      const { data, error } = await client
+        .from("snack_flavors")
+        .select("id,name")
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true })
+        .order("name", { ascending: true });
+      if (error) setErr(error.message || "맛 목록을 불러오지 못했습니다.");
+      else setFlavors(data || []);
+      setFlavorsLoading(false);
+    })();
+  }, [authOK]);
+
+  function toggleFlavor(id) {
+    setSelectedFlavors((prev) =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  }
+
+  // 파일 미리보기  
   useEffect(() => {
     if (!file) { setPreview(""); return; }
     const url = URL.createObjectURL(file);
@@ -67,14 +124,15 @@ export default function SnackCreatePage() {
     return () => URL.revokeObjectURL(url);
   }, [file]);
 
-  // 간단한 랜덤 파일명
+  // 간단한 랜덤 파일명  
   function cryptoRandom() {
     const a = globalThis.crypto?.getRandomValues?.(new Uint32Array(4));
     return a ? Array.from(a, x => x.toString(16).padStart(8, "0")).join("") : String(Date.now());
   }
 
   // Storage 업로드 (비공개 버킷) → 저장용 path 반환
-  async function uploadFileToStorage(client, userId, file) {
+  // (원본 파일에 있던 내부 구현을 그대로 사용)  
+  async function uploadFileToStorage({ file, userId }) {
     if (!/^image\/(jpeg|png|webp|gif)$/.test(file.type)) {
       throw new Error("지원되지 않는 이미지 형식입니다. (jpeg/png/webp/gif)");
     }
@@ -88,6 +146,7 @@ export default function SnackCreatePage() {
       file.type === "image/webp" ? "webp" :
       file.type === "image/gif"  ? "gif" : "bin";
 
+    const client = getSupabaseClient();
     const path = `${userId}/${cryptoRandom()}.${ext}`;
     const { error } = await client
       .storage
@@ -98,8 +157,6 @@ export default function SnackCreatePage() {
         contentType: file.type,
       });
     if (error) throw error;
-
-    // 비공개 버킷이므로 여기선 public URL을 만들지 않고 path만 리턴
     return path;
   }
 
@@ -116,8 +173,19 @@ export default function SnackCreatePage() {
       if (!user) throw new Error("로그인이 필요합니다.");
 
       if (!file) throw new Error("이미지 파일을 업로드해 주세요.");
+      if (!typeId) throw new Error("과자 종류를 선택해 주세요.");
+
       const imagePath = await uploadFileToStorage({ file, userId: user.id });
-      await createSnack({ name, brand, imagePath, userId: user.id });
+      const snackId = await createSnack({ name, brand, imagePath, userId: user.id, typeId });
+
+      // 맛 매핑 upsert
+      if (selectedFlavors.length) {
+        const rows = selectedFlavors.map(fid => ({ snack_id: snackId, flavor_id: fid }));
+        const { error: mapErr } = await client
+          .from("snack_flavors_map")
+          .upsert(rows, { onConflict: "snack_id,flavor_id", ignoreDuplicates: true });
+        if (mapErr) throw mapErr;
+      }!  
 
       router.replace("/admin/snacks");
     } catch (e) {
@@ -155,6 +223,42 @@ export default function SnackCreatePage() {
             />
           </label>
 
+          <label>
+            과자 종류*
+            <select
+              value={typeId}
+              onChange={(e)=>setTypeId(e.target.value)}
+              disabled={typesLoading || !types.length}
+              required
+            >
+              {types.map(t => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          </label>
+
+          <fieldset className="fieldset">
+          <legend>맛(복수 선택 가능)</legend>
+          {flavorsLoading ? (
+            <p>맛 목록 불러오는 중…</p>
+          ) : !flavors.length ? (
+            <p>등록된 맛이 없습니다.</p>
+          ) : (
+            <div className="chips">
+              {flavors.map(f => (
+                <label key={f.id} className="chip">
+                  <input
+                    type="checkbox"
+                    checked={selectedFlavors.includes(f.id)}
+                    onChange={() => toggleFlavor(f.id)}
+                  />
+                  <span>{f.name}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </fieldset>
+
           <label className="block">
             이미지 업로드*
             <input
@@ -172,7 +276,7 @@ export default function SnackCreatePage() {
           )}
 
           <div className="row">
-            <button type="submit" disabled={saving || !name.trim() || !file}>
+            <button type="submit" disabled={saving || !name.trim() || !file || !typeId}>
               {saving ? "저장 중..." : "등록"}
             </button>
             {err && <span className="err">{err}</span>}
@@ -186,7 +290,7 @@ export default function SnackCreatePage() {
         h1 { margin:0 0 12px; font-size:22px; }
         .form { display:grid; gap:12px; }
         label { display:grid; gap:6px; font-size:14px; }
-        input[type="text"], input[type="url"], input[type="file"] {
+        input[type="text"], input[type="url"], input[type="file"], select {
           padding:10px 12px; border:1px solid #ddd; border-radius:8px; font-size:14px;
         }
         .block { display:grid; gap:6px; }
@@ -194,6 +298,9 @@ export default function SnackCreatePage() {
         .row { display:flex; gap:10px; align-items:center; }
         button { padding:10px 14px; border:none; border-radius:8px; background:#222; color:#fff; cursor:pointer; }
         .err { color:#c00; font-size:13px; }
+        .fieldset { display:grid; gap:8px; }
+        .chips { display:flex; flex-wrap:wrap; gap:8px; }
+        .chip { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border:1px solid #ddd; border-radius:999px; }
       `}</style>
     </section>
   );

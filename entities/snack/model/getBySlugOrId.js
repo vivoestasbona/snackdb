@@ -3,22 +3,25 @@ import { getSupabaseServer } from "@shared/api/supabase/server";
 import { permanentRedirect } from "next/navigation";
 
 /**
- * slug 또는 id로 과자를 조회하고, 평균 점수도 계산
+ * slug 또는 id로 과자를 조회하고, 평균 점수 + 맛 목록까지 반환
  */
 export async function getBySlugOrId(slugOrId) {
   const sb = getSupabaseServer();
 
-  // URL 파라미터 디코딩 + 정규화
+  // URL 파라미터 정규화
   const key = decodeURIComponent(slugOrId || "");
   const normalized = key
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
     .replace(/(^-+|-+$)/g, "");
 
-  // 1) slug 매칭
+  // 1) slug 매칭 (snack_types 조인)
   let { data: snack, error } = await sb
     .from("snacks")
-    .select("id, name, brand, image_path, slug")
+    .select(`
+      id, name, brand, image_path, slug, type_id,
+      type:snack_types ( id, name, slug )
+    `)
     .eq("slug", key)
     .eq("is_public", true)
     .maybeSingle();
@@ -28,7 +31,10 @@ export async function getBySlugOrId(slugOrId) {
   if (!snack && normalized !== key) {
     const { data: alt, error: e2 } = await sb
       .from("snacks")
-      .select("id, name, brand, image_path, slug")
+      .select(`
+        id, name, brand, image_path, slug, type_id,
+        type:snack_types ( id, name, slug )
+      `)
       .eq("slug", normalized)
       .eq("is_public", true)
       .maybeSingle();
@@ -40,7 +46,7 @@ export async function getBySlugOrId(slugOrId) {
   if (!snack && /^[0-9a-f-]{36}$/i.test(key)) {
     const { data: byId } = await sb
       .from("snacks")
-      .select("id, name, brand, image_path, slug")
+      .select("id, slug")
       .eq("id", key)
       .eq("is_public", true)
       .maybeSingle();
@@ -49,9 +55,9 @@ export async function getBySlugOrId(slugOrId) {
     }
   }
 
-  if (!snack) return { snack: null, avg: null };
+  if (!snack) return { snack: null, avg: null, flavors: [] };
 
-  // SQL 뷰에서 평균/카운트를 한 번에 가져옴
+  // 평균 점수
   const { data: avgRow, error: avgErr } = await sb
     .from("snack_scores_avg")
     .select("avg_tasty, avg_value, avg_plenty, avg_clean, avg_addictive, review_count")
@@ -69,5 +75,17 @@ export async function getBySlugOrId(slugOrId) {
         count:     avgRow.review_count ?? 0,
       }
     : null;
-  return { snack, avg };
+
+  // 맛 목록
+  const { data: flavorRows, error: fErr } = await sb
+    .from("snack_flavors_map")
+    .select("flavor:snack_flavors(id,name,slug)")
+    .eq("snack_id", snack.id);
+  if (fErr) console.error("[snack_flavors_map] error:", fErr);
+
+  const flavors = (flavorRows || [])
+    .map(r => r.flavor)
+    .filter(Boolean);
+
+  return { snack, avg, flavors };
 }

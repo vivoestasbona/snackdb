@@ -8,7 +8,7 @@ import { getBySlugOrId } from "@entities/snack/model/getBySlugOrId";
 import { snackMetadata, snackJsonLd } from "@shared/lib/seo/snackSeo";
 
 export async function generateMetadata({ params }) {
-  const { slug } = await params;               //  async 프록시에서 안전 추출
+  const { slug } = await params;
   const { snack, avg } = await getBySlugOrId(slug);
   if (!snack) return { title: "SnackDB" };
   return snackMetadata(snack, avg);
@@ -17,14 +17,13 @@ export async function generateMetadata({ params }) {
 export default async function Page({ params, searchParams }) {
   const { slug } = await params;
   const sp = (await searchParams) || {};
-  const pv = sp.preview;
-  const preview = pv != null && pv !== "0" && pv !== "false";
+  const preview = sp.preview != null && sp.preview !== "0" && sp.preview !== "false";
+
   if (preview) {
-    // 클라이언트에서 관리자 확인 후 is_public 무시하고 렌더
     return <AdminPreview slug={slug} />;
   }
-  const { snack, avg } = await getBySlugOrId(slug); // 기존 SSR (is_public=true)
-  
+
+  const { snack, avg, flavors } = await getBySlugOrId(slug);
   if (!snack) {
     return (
       <section style={{ padding: 16 }}>
@@ -37,7 +36,6 @@ export default async function Page({ params, searchParams }) {
     ? `/api/images/snack?path=${encodeURIComponent(snack.image_path)}`
     : null;
   const { q = "" } = await searchParams;
-
   const jsonLd = snackJsonLd(snack, avg);
 
   return (
@@ -53,14 +51,22 @@ export default async function Page({ params, searchParams }) {
           </div>
         </div>
         {snack.brand && <p className="snack-brand">{snack.brand}</p>}
+        {snack.type?.name && (
+          <p className="snack-type">종류: {snack.type.name}</p>
+        )}
+        {!!(flavors && flavors.length) && (
+          <div className="snack-flavors">
+            {flavors.map(f => (
+              <span key={f.id} className="flavor-chip">{f.name}</span>
+            ))}
+          </div>
+        )}
         {q ? (
           <a href="javascript:history.back()" className="snack-ghost">
             ← 검색으로
           </a>
         ) : (
-          <a href="/search" className="snack-ghost">
-            목록
-          </a>
+          <a href="/search" className="snack-ghost">목록</a>
         )}
       </aside>
 
@@ -83,7 +89,6 @@ export default async function Page({ params, searchParams }) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      {/* 전역 <style> (서버 컴포넌트에서 styled-jsx 사용 금지) */}
       <style>{`
         .snack-wrap { max-width: 1100px; margin:0 auto; padding:16px; display:grid; grid-template-columns: 340px 1fr; gap:16px; }
         @media (max-width: 880px){ .snack-wrap { grid-template-columns: 1fr; } }
@@ -91,46 +96,16 @@ export default async function Page({ params, searchParams }) {
         .snack-photo { width:100%; height:auto; border-radius:10px; border:1px solid #eee; background:#fff; }
         .snack-title { margin:0; font-size:24px; }
         .snack-brand { color:#555; margin:0 0 4px; }
+        .snack-type { color:#444; font-size:13px; margin:2px 0 6px; }
+        .snack-flavors { display:flex; flex-wrap:wrap; gap:6px; margin:2px 0 6px; }
+        .flavor-chip { display:inline-block; padding:4px 8px; border:1px solid #ddd; border-radius:999px; font-size:12px; background:#fafafa; }
         .snack-ghost { display:inline-block; padding:8px 12px; border:1px solid #ddd; border-radius:8px; background:#f8f8f8; color:#222; text-decoration:none; }
         .snack-right { display:grid; gap:12px; }
         .snack-card { background:#fff; border:1px solid #eee; border-radius:12px; padding:16px; }
         .snack-card h2 { margin:0 0 10px; font-size:18px; }
-        .title-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-        }
-
-        .title-left {
-          display: flex;
-          align-items: baseline;
-          gap: 8px;
-          flex: 1 1 auto;
-          min-width: 0;
-        }
-
-        .snack-title {
-          margin: 0;
-          font-size: 24px;
-          line-height: 1.2;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .snack-brand {
-          margin: 4px 0 8px;
-          color: #555;
-          font-size: 14px;
-        }
-
-        .title-right {
-          flex: 0 0 auto;
-          display: inline-flex;
-          align-items: center;
-        }
-
+        .title-row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+        .title-left { display:flex; align-items:baseline; gap:8px; flex:1 1 auto; min-width:0; }
+        .title-right { flex:0 0 auto; display:inline-flex; align-items:center; }
       `}</style>
     </section>
   );
