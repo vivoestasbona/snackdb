@@ -195,6 +195,19 @@ export default function SnackListPage() {
     await load();
   }
 
+  // 개별 공개/비공개 토글
+  async function updateOneVisibility(sb, items, setItems, id, nextPublic) {
+    // 낙관적 업데이트
+    setItems(prev => prev.map(r => (r.id === id ? { ...r, is_public: nextPublic } : r)));
+    const { error } = await sb.from("snacks").update({ is_public: nextPublic }).eq("id", id);
+    if (error) {
+      alert("변경 실패: " + (error.message || ""));
+      // 롤백
+      setItems(prev => prev.map(r => (r.id === id ? { ...r, is_public: !nextPublic } : r)));
+    }
+  }
+
+
   if (!authOK) return null;
 
   return (
@@ -273,7 +286,16 @@ export default function SnackListPage() {
                         <div className="name"><b>{it.brand}</b> {it.name}</div>
                         {it.slug && <div className="sub">{it.slug}</div>}
                       </td>
-                      <td><span className={`badge ${visible ? "ok" : "off"}`}>{visible ? "공개" : "비공개"}</span></td>
+                      <td>
+                       <label className="toggle">
+                        <input
+                          type="checkbox"
+                          checked={visible}
+                          onChange={() => updateOneVisibility(sb, items, setItems, it.id, !visible)}
+                        />
+                        <span />
+                      </label>
+                     </td>
                       <td>
                         <div className="metrics">
                           <span className="avg" title="전체 평균 점수">{it.avgScore ?? "-"}</span>
@@ -403,6 +425,12 @@ export default function SnackListPage() {
 
         .pager { margin-top:12px; display:flex; gap:10px; align-items:center; justify-content:center; }
         .pager button { padding:8px 12px; border:1px solid #ddd; border-radius:8px; background:#f8f8f8; }
+        .toggle{position:relative;display:inline-block;width:44px;height:24px}
+        .toggle input{display:none}
+        .toggle span{position:absolute;inset:0;background:#ddd;border-radius:999px;transition:.2s;cursor:pointer}
+        .toggle span::after{content:"";position:absolute;height:18px;width:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 2px rgba(0,0,0,.1)}
+        .toggle input:checked + span{background:#4a8}
+        .toggle input:checked + span::after{transform:translateX(20px)}
       `}</style>
     </section>
   );
