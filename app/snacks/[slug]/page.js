@@ -1,21 +1,39 @@
 // app/snacks/[slug]/page.jsx
-export const revalidate = 120;
+export const dynamic = "force-dynamic";
+export const revalidate = 0; // 안전하게 완전 SSR
 import RadarWithUser from "@features/rate-snack/ui/RadarWithUser";
 import LikeButton from "@features/like-snack/ui/LikeButton";
 import OneLiners from "@entities/review/ui/OneLiners";
 import AdminPreview from "@widgets/snack-preview/ui/AdminPreview";
 import { getBySlugOrId } from "@entities/snack/model/getBySlugOrId";
 import { snackMetadata, snackJsonLd } from "@shared/lib/seo/snackSeo";
+import { redirect, notFound } from "next/navigation";
+import { getSupabaseServer } from "@shared/api/supabase/server";
 
 export async function generateMetadata({ params }) {
-  const { slug } = await params;
+  const { slug: raw } = await params;
+  const slug = decodeURIComponent(String(raw)).normalize("NFC").toLowerCase();
   const { snack, avg } = await getBySlugOrId(slug);
-  if (!snack) return { title: "SnackDB" };
-  return snackMetadata(snack, avg);
+  if (snack) return snackMetadata(snack, avg);
+
+  // 히스토리에서 현재 slug 찾아 메타 생성
+  const sb = getSupabaseServer();
+  const { data: hist } = await sb
+    .from("snack_slug_history").select("snack_id").eq("old_slug", slug).single();
+  if (hist?.snack_id) {
+    const { data: cur } = await sb
+      .from("snacks").select("slug").eq("id", hist.snack_id).single();
+    if (cur?.slug) {
+      const { snack: s2, avg: a2 } = await getBySlugOrId(cur.slug);
+      if (s2) return snackMetadata(s2, a2);
+    }
+  }
+  return { title: "SnackDB" };
 }
 
 export default async function Page({ params, searchParams }) {
-  const { slug } = await params;
+  const { slug: raw } = await params;
+  const slug = decodeURIComponent(String(raw)).normalize("NFC").toLowerCase();
   const sp = (await searchParams) || {};
   const preview = sp.preview != null && sp.preview !== "0" && sp.preview !== "false";
 
@@ -25,11 +43,30 @@ export default async function Page({ params, searchParams }) {
 
   const { snack, avg, flavors, keywords } = await getBySlugOrId(slug);
   if (!snack) {
-    return (
-      <section style={{ padding: 16 }}>
-        <h1>항목을 찾을 수 없습니다.</h1>
-      </section>
-    );
+    const sb = getSupabaseServer();
+    const { data: hist, error: histErr } = await sb
+      .from("snack_slug_history")
+      .select("snack_id")
+      .eq("old_slug", slug)
+      .single();
+    if (!hist) {
+   return (
+     <pre style={{padding:16, background:"#111", color:"#0f0"}}>
+       {JSON.stringify({ step:"hist-miss", slug, histErr }, null, 2)}
+     </pre>
+   );
+ }
+    
+    if (hist?.snack_id) {
+      const { data: cur, error: curErr } = await sb
+        .from("snacks")
+        .select("slug")
+        .eq("id", hist.snack_id)
+        .single();
+      console.error("[current-slug]", { cur, curErr }); // 🔎 임시 로그
+      if (cur?.slug) redirect(encodeURI(`/snacks/${cur.slug}`));
+    }
+    return notFound();
   }
 
   const imgUrl = snack.image_path
