@@ -1,7 +1,7 @@
 // widgets/snack-form/ui/SnackForm.jsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import TypeSelect from "@features/manage-snack-categories/ui/TypeSelect";
 import FlavorChipsSelector from "@features/manage-snack-categories/ui/FlavorChipsSelector";
 import TagInput from "@features/keywords/ui/TagInput";
@@ -21,8 +21,11 @@ export default function SnackForm({
   const [name, setName] = useState(initial?.name || "");
   const [brand, setBrand] = useState(initial?.brand || "");
   const [typeId, setTypeId] = useState(initial?.typeId ?? "");
-  const [flavorIds, setFlavorIds] = useState(initial?.flavorIds || []);
+  const [flavorIds, setFlavorIds] = useState(
+    initial?.typeId != null ? String(initial.typeId) : ""
+  );
   const [tags, setTags] = useState(initial?.tags || []);
+  const commitPendingRef = useRef(null); // TagInput 미확정 입력 커밋용
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(initial?.imageUrl || "");
   const [saving, setSaving] = useState(false);
@@ -41,17 +44,27 @@ export default function SnackForm({
     setSaving(true); setErr("");
 
     try {
+      // 제출 직전, TagInput 입력창에 남아있는 미확정 문자열까지 확정
+      const latestTags = commitPendingRef.current
+        ? await commitPendingRef.current()
+        : tags;
       const { data: s } = await sb.auth.getSession();
       const user = s?.session?.user;
       if (!user) throw new Error("로그인이 필요합니다.");
 
       if (!typeId) throw new Error("과자 종류를 선택해 주세요.");
+      // 숫자 컬럼에 안전하게 넣기 위해 숫자 문자열이면 숫자로, 아니면 그대로(예: UUID)
+      const typeIdForDb =
+        typeof typeId === "string" && /^\d+$/.test(typeId) ? Number(typeId) : typeId;
+
 
       let imagePath = initial?.imagePath || null;
       if (mode === "create") {
         if (!file) throw new Error("이미지 파일을 업로드해 주세요.");
         imagePath = await uploadFileToStorage({ file, userId: user.id });
-        const snackId = await createSnack({ name, brand, imagePath, userId: user.id, typeId });
+        const snackId = await createSnack({ 
+            name, brand, imagePath, userId: user.id, typeId: typeIdForDb
+         });
 
         // 맛 매핑
         if (flavorIds.length) {
@@ -62,8 +75,8 @@ export default function SnackForm({
         }
 
         // 태그(있다면)
-        if (tags.length) {
-          const kwIds = await ensureKeywords(tags);
+        if (latestTags.length) {
+          const kwIds = await ensureKeywords(latestTags);
           await mapKeywords(snackId, kwIds);
         }
 
@@ -73,7 +86,7 @@ export default function SnackForm({
         const snackId = initial.id;
         // 본문
         const up1 = await sb.from("snacks").update({
-          name, brand, type_id: typeId
+          name, brand, type_id: typeIdForDb
         }).eq("id", snackId);
         if (up1.error) throw up1.error;
 
@@ -94,8 +107,8 @@ export default function SnackForm({
 
         // 태그 리셋 후 재적용
         await sb.from("snack_keywords_map").delete().eq("snack_id", snackId);
-        if (tags.length) {
-          const kwIds = await ensureKeywords(tags);
+        if (latestTags.length) {
+          const kwIds = await ensureKeywords(latestTags);
           await mapKeywords(snackId, kwIds);
         }
 
@@ -125,9 +138,7 @@ export default function SnackForm({
 
       {preview && <div className="preview"><img src={preview} alt="미리보기" /></div>}
 
-      {/* 태그 입력 – 필요 시 주석 해제
-      <TagInput value={tags} onChange={setTags} />
-      */}
+      <TagInput value={tags} onChange={setTags} commitPendingRef={commitPendingRef} />
 
       <div className="row">
         <button type="submit" disabled={saving || !name.trim() || !typeId}>

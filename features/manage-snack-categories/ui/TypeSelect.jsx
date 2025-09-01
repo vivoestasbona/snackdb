@@ -4,18 +4,27 @@ import { useEffect } from "react";
 import { useSnackTypes } from "@features/manage-snack-categories/model/useSnackTypes";
 
 export default function TypeSelect({
-  value, onChange, required = true, autoSelectFirst = true, disabled: forceDisabled = false,
-  name = "type_id", id
+  value,
+  onChange,
+  required = true,
+  autoSelectFirst = true,
+  disabled: forceDisabled = false,
+  name = "type_id",
+  id,
 }) {
   const { types, loading } = useSnackTypes();
+  const disabled = forceDisabled || loading || !types.length;
 
-  // 목록이 로드되면 기본값 자동 선택(옵션)
+  // 목록 로드 후 자동 기본 선택 (빈값/NaN 모두 처리)
   useEffect(() => {
     if (!autoSelectFirst) return;
-    if (!value && types?.length) onChange?.(types[0].id);
+    const empty = value === "" || value == null || Number.isNaN(value);
+    if (empty && types?.length) onChange?.(types[0].id);
   }, [autoSelectFirst, value, types, onChange]);
 
-  const disabled = forceDisabled || loading || !types.length;
+  // select는 문자열로 제어 (NaN → "")
+  const normalizedValue =
+    value == null || value === "" ? "" : String(value);
 
   return (
     <label>
@@ -23,14 +32,19 @@ export default function TypeSelect({
       <select
         id={id}
         name={name}
-        value={value ?? ""}
-        onChange={(e)=>onChange?.(e.target.value ? Number(e.target.value) : "")}
+        value={normalizedValue}
+        onChange={(e) => {
+          const v = e.target.value;
+          onChange?.(v === "" ? "" : v);
+        }}
         disabled={disabled}
         required={required}
       >
         {!autoSelectFirst && <option value="">선택하세요</option>}
-        {types.map(t => (
-          <option key={t.id} value={t.id}>{t.name}</option>
+        {types.map((t) => (
+          <option key={t.id} value={String(t.id)}>
+            {t.name}
+          </option>
         ))}
       </select>
     </label>
