@@ -21,9 +21,7 @@ export default function SnackForm({
   const [name, setName] = useState(initial?.name || "");
   const [brand, setBrand] = useState(initial?.brand || "");
   const [typeId, setTypeId] = useState(initial?.typeId ?? "");
-  const [flavorIds, setFlavorIds] = useState(
-    initial?.typeId != null ? String(initial.typeId) : ""
-  );
+  const [flavorIds, setFlavorIds] = useState(initial?.flavorIds || []);
   const [tags, setTags] = useState(initial?.tags || []);
   const commitPendingRef = useRef(null); // TagInput 미확정 입력 커밋용
   const [file, setFile] = useState(null);
