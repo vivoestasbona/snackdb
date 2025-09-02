@@ -1,9 +1,7 @@
 // app/snacks/[slug]/page.jsx
 export const dynamic = "force-dynamic";
 export const revalidate = 0; // 안전하게 완전 SSR
-import RadarWithUser from "@features/rate-snack/ui/RadarWithUser";
-import LikeButton from "@features/like-snack/ui/LikeButton";
-import OneLiners from "@entities/review/ui/OneLiners";
+import SnackDetailView from "@widgets/snack-preview/ui/SnackDetailView";
 import AdminPreview from "@widgets/snack-preview/ui/AdminPreview";
 import { getBySlugOrId } from "@entities/snack/model/getBySlugOrId";
 import { snackMetadata, snackJsonLd } from "@shared/lib/seo/snackSeo";
@@ -37,10 +35,12 @@ export default async function Page({ params, searchParams }) {
   const sp = (await searchParams) || {};
   const preview = sp.preview != null && sp.preview !== "0" && sp.preview !== "false";
 
+  // ✅ 미리보기는 서버 조회 전에 바로 클라이언트 미리보기로
   if (preview) {
     return <AdminPreview slug={slug} />;
   }
 
+  // 🔽 일반 공개 흐름만 서버에서 조회/리다이렉트 처리
   const { snack, avg, flavors, keywords } = await getBySlugOrId(slug);
   if (!snack) {
     const sb = getSupabaseServer();
@@ -48,14 +48,13 @@ export default async function Page({ params, searchParams }) {
       .from("snack_slug_history")
       .select("snack_id")
       .eq("old_slug", slug)
-      .single();
+      .maybeSingle();
     if (!hist) {
-   return (
-     <pre style={{padding:16, background:"#111", color:"#0f0"}}>
-       {JSON.stringify({ step:"hist-miss", slug, histErr }, null, 2)}
-     </pre>
-   );
- }
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("[slug-history miss]", { slug, histErr });
+      }
+      return notFound();
+    }
     
     if (hist?.snack_id) {
       const { data: cur, error: curErr } = await sb
@@ -63,96 +62,35 @@ export default async function Page({ params, searchParams }) {
         .select("slug")
         .eq("id", hist.snack_id)
         .single();
-      console.error("[current-slug]", { cur, curErr }); // 🔎 임시 로그
-      if (cur?.slug) redirect(encodeURI(`/snacks/${cur.slug}`));
+      if (process.env.NODE_ENV !== "production") {
+        // 디버그는 개발에서만
+        console.warn("[current-slug]", { cur, curErr });
+      }
+      if (cur?.slug) {
+        const q = preview ? "?preview=1" : "";
+        return redirect(`/snacks/${encodeURIComponent(cur.slug)}${q}`);
+      }
     }
     return notFound();
   }
 
-  const imgUrl = snack.image_path
-    ? `/api/images/snack?path=${encodeURIComponent(snack.image_path)}`
-    : null;
-  const { q = "" } = await searchParams;
-  const jsonLd = snackJsonLd(snack, avg);
+  // ✅ 정규 슬러그로 리다이렉트 (요청 slug와 실제 slug가 다르면)
+  if (snack.slug && snack.slug !== slug) {
+    return redirect(`/snacks/${encodeURIComponent(snack.slug)}${preview ? "?preview=1" : ""}`);
+  }
+
+  // ✅ 이제 미리보기 분기
+  if (preview) {
+    return <AdminPreview slug={snack.slug} />;
+  }
 
   return (
-    <section className="snack-wrap">
-      <aside className="snack-left">
-        {imgUrl && <img src={imgUrl} alt={snack.name} className="snack-photo" />}
-        <div className="title-row">
-          <div className="title-left">
-            <h1 className="snack-title">{snack.name}</h1>
-          </div>
-          <div className="title-right">
-            <LikeButton snackId={snack.id} />
-          </div>
-        </div>
-        {snack.brand && <p className="snack-brand">{snack.brand}</p>}
-        {snack.type?.name && (
-          <p className="snack-type">종류: {snack.type.name}</p>
-        )}
-        {!!(flavors && flavors.length) && (
-          <div className="snack-flavors">
-            {flavors.map(f => (
-              <span key={f.id} className="flavor-chip">{f.name}</span>
-            ))}
-          </div>
-        )}
-        {!!(keywords && keywords.length) && (
-          <div className="snack-keywords">
-            {keywords.map(k => (
-              <span key={k.id} className="keyword-chip">{k.name}</span>
-            ))}
-          </div>
-        )}
-        {q ? (
-          <a href="javascript:history.back()" className="snack-ghost">
-            ← 검색으로
-          </a>
-        ) : (
-          <a href="/search" className="snack-ghost">목록</a>
-        )}
-      </aside>
-
-      <main className="snack-right">
-        <section className="snack-card">
-          <h2>평균 스탯</h2>
-          <RadarWithUser
-            snackId={snack.id}
-            avg={avg || { tasty:0, value:0, plenty:0, clean:0, addictive:0 }}
-          />
-        </section>
-
-        <section className="snack-card">
-          <OneLiners snackId={snack.id} />
-        </section>
-      </main>
-
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
-
-      <style>{`
-        .snack-wrap { max-width: 1100px; margin:0 auto; padding:16px; display:grid; grid-template-columns: 340px 1fr; gap:16px; }
-        @media (max-width: 880px){ .snack-wrap { grid-template-columns: 1fr; } }
-        .snack-left { display:grid; gap:12px; align-content:start; }
-        .snack-photo { width:100%; height:auto; border-radius:10px; border:1px solid #eee; background:#fff; }
-        .snack-title { margin:0; font-size:24px; }
-        .snack-brand { color:#555; margin:0 0 4px; }
-        .snack-type { color:#444; font-size:13px; margin:2px 0 6px; }
-        .snack-flavors { display:flex; flex-wrap:wrap; gap:6px; margin:2px 0 6px; }
-        .flavor-chip { display:inline-block; padding:4px 8px; border:1px solid #ddd; border-radius:999px; font-size:12px; background:#fafafa; }
-        .snack-ghost { display:inline-block; padding:8px 12px; border:1px solid #ddd; border-radius:8px; background:#f8f8f8; color:#222; text-decoration:none; }
-        .snack-right { display:grid; gap:12px; }
-        .snack-card { background:#fff; border:1px solid #eee; border-radius:12px; padding:16px; }
-        .snack-card h2 { margin:0 0 10px; font-size:18px; }
-        .title-row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-        .title-left { display:flex; align-items:baseline; gap:8px; flex:1 1 auto; min-width:0; }
-        .title-right { flex:0 0 auto; display:inline-flex; align-items:center; }
-        .snack-keywords { display:flex; flex-wrap:wrap; gap:6px; margin:2px 0 6px; }
-        .keyword-chip { display:inline-block; padding:4px 8px; border:1px solid #ddd; border-radius:999px; font-size:12px; background:#eef2ff; }
-      `}</style>
-    </section>
+    <SnackDetailView
+      snack={snack}
+      avg={avg}
+      flavors={flavors}
+      keywords={keywords}
+      preview={false}
+    />
   );
 }

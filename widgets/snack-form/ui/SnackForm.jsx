@@ -78,7 +78,13 @@ export default function SnackForm({
           await mapKeywords(snackId, kwIds);
         }
 
-        onDone?.(snackId);
+        // ✅ 저장된 slug 조회 후 미리보기로 보낼 수 있게 slug 전달
+        const { data: createdRow } = await sb
+          .from("snacks")
+          .select("slug")
+          .eq("id", snackId)
+          .single();
+        onDone?.(createdRow?.slug || null);
       } else {
         // edit
         const snackId = initial.id;
@@ -110,7 +116,13 @@ export default function SnackForm({
           await mapKeywords(snackId, kwIds);
         }
 
-        onDone?.(snackId);
+        // ✅ 수정 뒤에도 현재 slug를 다시 확인해서 전달(이름 변경 등 slug 변동 대비)
+        const { data: updatedRow } = await sb
+          .from("snacks")
+          .select("slug")
+          .eq("id", snackId)
+          .single();
+        onDone?.(updatedRow?.slug || null);
       }
     } catch (e) {
       setErr(e.message || "저장 실패");

@@ -5,6 +5,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@shared/api/supabaseClient";
+import DeleteButton from "@features/delete-snacks/ui/DeleteButton";
+import { deleteSnacks } from "@features/delete-snacks/model/deleteSnacks";
+import RowActions from "@widgets/admin-snack-list/ui/RowActions";
 
 const PAGE_SIZE = 20;
 const VIS_COL = "is_public"; // 공개/비공개 컬럼
@@ -31,6 +34,10 @@ export default function SnackListPage() {
 
   // 선택(체크박스)
   const [selected, setSelected] = useState(() => new Set());
+  // 단건 삭제 후 목록에서 제거
+  const removeRow = useCallback((id) => {
+    setItems(prev => prev.filter(r => r.id !== id));
+  }, []);
 
   // 🔐 세션 가드
   useEffect(() => {
@@ -175,13 +182,17 @@ export default function SnackListPage() {
   const selectedCount = selected.size;
 
   // 일괄 삭제
-  async function bulkDelete() {
-    if (!selectedCount) return;
-    if (!confirm(`선택한 ${selectedCount}개 과자를 삭제할까요? 이 작업은 되돌릴 수 없습니다.`)) return;
-    const ids = Array.from(selected);
-    const { error } = await sb.from("snacks").delete().in("id", ids);
-    if (error) { alert("삭제 중 오류가 발생했습니다."); console.error(error); return; }
-    await load();
+  async function handleBulkDelete() {
+    if (!selected.size) return;
+    const ok = confirm(`선택한 ${selected.size}개 항목을 삭제할까요?`);
+    if (!ok) return;
+    try {
+      const ids = await deleteSnacks([...selected]);
+      setItems(prev => prev.filter(r => !ids.includes(r.id)));
+      setSelected(new Set());
+    } catch (e) {
+      alert(e.message || "삭제 실패");
+    }
   }
 
   // 일괄 공개/비공개
@@ -206,7 +217,6 @@ export default function SnackListPage() {
       setItems(prev => prev.map(r => (r.id === id ? { ...r, is_public: !nextPublic } : r)));
     }
   }
-
 
   if (!authOK) return null;
 
@@ -236,7 +246,7 @@ export default function SnackListPage() {
           <span>선택: {selectedCount}개</span>
           <button onClick={() => bulkSetVisibility(true)} disabled={selectedCount===0}>공개</button>
           <button onClick={() => bulkSetVisibility(false)} disabled={selectedCount===0}>비공개</button>
-          <button onClick={bulkDelete} disabled={selectedCount===0}>삭제</button>
+          <button onClick={handleBulkDelete} disabled={selectedCount===0}>삭제</button>
         </div>
       </div>
 
@@ -304,13 +314,13 @@ export default function SnackListPage() {
                       </td>
                       <td>{new Date(it.created_at).toLocaleDateString()}</td>
                       <td>
-                        <Link href={`/admin/snacks/${it.id}/edit`}>수정</Link>
-                        {it.slug && (
-                          <>
-                            {" · "}
-                            <Link href={`/snacks/${encodeURIComponent(it.slug)}?preview=1`} target="_blank">보기</Link>
-                          </>
-                        )}
+                        <RowActions
+                          id={it.id}
+                          slug={it.slug}
+                          name={it.name}
+                          brand={it.brand}
+                          onDeleted={removeRow}
+                        />
                       </td>
                     </tr>
                   );
@@ -334,15 +344,15 @@ export default function SnackListPage() {
                       {it.slug && <div className="slug">{it.slug}</div>}
                       <div className="when">{new Date(it.created_at).toLocaleDateString()}</div>
                     </div>
-                    <div className="ops">
-                      <Link href={`/admin/snacks/${it.id}/edit`}>수정</Link>
-                      {it.slug && (
-                        <>
-                          {" · "}
-                          <Link href={`/snacks/${encodeURIComponent(it.slug)}?preview=1`} target="_blank">보기</Link>
-                        </>
-                      )}
-                    </div>
+                    <td>
+                      <RowActions
+                        id={it.id}
+                        slug={it.slug}
+                        name={it.name}
+                        brand={it.brand}
+                        onDeleted={removeRow}
+                      />
+                    </td>
                     {/* ❤️ + 평균 → 카드 우하단 */}
                     <div className="metrics metrics-card" title="좋아요 · 평균 점수">
                       <span className="avg">{it.avgScore ?? "-"}</span>

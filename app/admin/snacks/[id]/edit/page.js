@@ -60,7 +60,7 @@ export default function SnackEditPage() {
         // snacks 기본 정보
         const { data: snack, error: snackErr } = await sb
           .from("snacks")
-          .select("id,name,brand,image_path,type_id")
+          .select("id,slug,name,brand,image_path,type_id")
           .eq("id", id)
           .single();
         if (snackErr || !snack) throw new Error(snackErr?.message || "항목을 찾을 수 없습니다.");
@@ -88,6 +88,7 @@ export default function SnackEditPage() {
         if (aborted) return;
         setInitial({
           id: snack.id,
+          slug: snack.slug,
           name: snack.name || "",
           brand: snack.brand || "",
           typeId: snack.type_id ?? "",
@@ -119,7 +120,9 @@ export default function SnackEditPage() {
         <SnackForm
           mode="edit"
           initial={initial}
-          onDone={() => router.replace(`/admin/snacks/${id}`)}
+          onDone={(savedSlug) =>
+            router.replace(`/snacks/${encodeURIComponent(savedSlug ?? initial.slug)}?preview=1`)
+          }
         />
       </div>
 
