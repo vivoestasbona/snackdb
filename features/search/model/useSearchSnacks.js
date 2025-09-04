@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { searchSnacks, loadSnackMetrics } from "@entities/snack/model/searchSnacks";
 
-export function useSearchSnacks({ term = "", page = 1, pageSize = 20 } = {}) {
+export function useSearchSnacks({ term = "", page = 1, pageSize = 20, operator = "and" } = {}) {
   const [state, setState] = useState({
     loading: true,
     items: [],
@@ -19,7 +19,9 @@ export function useSearchSnacks({ term = "", page = 1, pageSize = 20 } = {}) {
     (async () => {
       setState((s) => ({ ...s, loading: true }));
       try {
-        const { items, page: p, totalPages, pageIds } = await searchSnacks({ term, page, pageSize });
+        // 🔹 operator 전달
+        const { items, page: p, totalPages, pageIds } = await searchSnacks({ term, page, pageSize, operator });
+
         let avgMap = {}, likesMap = {}, likedSet = new Set();
         if (pageIds?.length) {
           const m = await loadSnackMetrics(pageIds);
@@ -33,8 +35,8 @@ export function useSearchSnacks({ term = "", page = 1, pageSize = 20 } = {}) {
         console.error(e);
       }
     })();
-    return () => { alive = false; };
-  }, [term, page, pageSize]);
+    // 🔹 op 변경 시도에도 다시 호출
+  }, [term, page, pageSize, operator]);
 
   return state;
 }

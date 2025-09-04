@@ -12,9 +12,10 @@ export default function SearchPage() {
   const sp = useSearchParams();
   const term = sp.get("q") ?? "";
   const page = Number(sp.get("page") ?? "1") || 1;
+  const op = ((sp.get("op") ?? "and").toLowerCase() === "or") ? "or" : "and";
 
   const { loading, items, totalPages, avgMap, likesMap, likedSet } =
-    useSearchSnacks({ term, page, pageSize: PAGE_SIZE });
+    useSearchSnacks({ term, page, pageSize: PAGE_SIZE, operator: op });
 
   return (
     <section className={styles.wrap}>
@@ -26,15 +27,15 @@ export default function SearchPage() {
       {loading ? (
         <div className={styles.empty}>불러오는 중…</div>
       ) : (
-        <SearchResults
-          term={term}
-          page={page}
-          totalPages={totalPages}
-          items={items}
-          avgMap={avgMap}
-          likesMap={likesMap}
-          likedSet={likedSet}
-        />
+        <SearchResults 
+        term={term} 
+        page={page} 
+        totalPages={totalPages} 
+        items={items}
+        avgMap={avgMap} 
+        likesMap={likesMap} 
+        likedSet={likedSet} 
+        op={op} />
       )}
     </section>
   );

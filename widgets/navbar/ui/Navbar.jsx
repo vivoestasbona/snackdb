@@ -1,13 +1,16 @@
 // widgets/navbar/ui/Navbar.jsx
 "use client";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import LoginModal from "@entities/user/ui/LoginModal";
 import { getSupabaseClient } from "@shared/api/supabaseClient";
+import TagPickerButton from "@features/search/ui/TagPickerButton";
 
 export default function Navbar() {
   const router = useRouter();
+  const searchRef = useRef(null);
+  const opRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [loginReason, setLoginReason] = useState(null);
   const [displayName, setDisplayName] = useState(null); // 닉네임
@@ -119,7 +122,9 @@ export default function Navbar() {
             onSubmit={(e) => {
               e.preventDefault();
               const v = e.currentTarget.q.value.trim();
-              router.push(v ? `/search?q=${encodeURIComponent(v)}&page=1` : `/search`);
+              const op = (e.currentTarget.op?.value || "and").toLowerCase() === "or" ? "or" : "and";
+              const base = v ? `/search?q=${encodeURIComponent(v)}&page=1` : `/search?page=1`;
+              router.push(`${base}&op=${op}`);
             }}
           >
             <div className="navSearchBox">
@@ -129,10 +134,13 @@ export default function Navbar() {
                 placeholder="검색"
                 aria-label="검색어 입력"
                 autoComplete="off"
+                ref={searchRef}
               />
+              <input type="hidden" name="op" defaultValue="and" ref={opRef} />
               <button type="submit" aria-label="검색">
                 <span aria-hidden>🔍</span>
               </button>
+              <TagPickerButton anchorRef={searchRef} opRef={opRef} />
             </div>
           </form>
 
@@ -166,6 +174,7 @@ export default function Navbar() {
           background: #ffffffcc;
           backdrop-filter: blur(6px);
           border-bottom: 1px solid #eee;
+          z-index: 1000;
         }
         .inner {
           max-width: var(--container-max);
@@ -233,13 +242,13 @@ export default function Navbar() {
           height:36px;
           border: 3px solid var(--nav-search-color);     /*  바깥 테두리 한 번만 */
           // border-radius: 3px;
-          overflow: hidden;                               /* 라운드 깔끔하게 */
+          overflow: visible;                    
           background:#fff;
           height: var(--nav-search-size);
         }
 
         /* 3) 내부 요소는 보더/라운드/마진 제거로 래퍼와 일체화 */
-        .navSearchBox :is(input,button){
+        .navSearchBox > :is(input,button){
           border: 0 !important;
           border-radius: 0 !important;
           margin: 0 !important;
@@ -258,7 +267,7 @@ export default function Navbar() {
         }
 
         /* 5) 우측 버튼 */
-        .navSearchBox button{
+        .navSearchBox > button{
           width: var(--nav-search-size);         /* ← 너비 = 높이 */
           padding: 0;                            /* 내부 패딩 제거 */
           border: 0 !important;
@@ -323,6 +332,12 @@ export default function Navbar() {
           box-shadow: none !important;
           color: #111 !important;
           text-decoration: none !important;
+        }
+
+        /* 칩이 선택된 동안에만 텍스트/캐럿 숨김 (placeholder는 숨기지 않음) */
+        .navSearchBox.hasChips > input{
+          color: transparent;
+          caret-color: transparent;
         }
 
       @media (min-width: 1024px){

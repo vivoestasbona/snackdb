@@ -4,10 +4,16 @@ import { getSupabaseClient } from "@shared/api/supabaseClient";
 
 const PAGE_SIZE_DEFAULT = 20;
 
-export async function searchSnacks({ term = "", page = 1, pageSize = PAGE_SIZE_DEFAULT } = {}) {
+export async function searchSnacks({
+  term = "",
+  page = 1,
+  pageSize = PAGE_SIZE_DEFAULT,
+  operator = "and",
+} = {}) {
   const client = getSupabaseClient();
   const norm = normalizeTerm(term);
   const tokens = tokenize(norm); // 공백 기반 토큰
+  const op = (operator || "and").toLowerCase() === "or" ? "or" : "and";
 
   // ▶ term 없음 → 서버 페이지네이션
   if (tokens.length === 0) {
@@ -56,16 +62,23 @@ export async function searchSnacks({ term = "", page = 1, pageSize = PAGE_SIZE_D
     }
   }));
 
-  // 모든 토큰 교집합
-  let idSet = idSetsPerToken[0] || new Set();
-  for (let i = 1; i < idSetsPerToken.length; i++) {
-    idSet = intersectSets(idSet, idSetsPerToken[i]);
-    if (idSet.size === 0) break;
+  // ▶ 결합 방식: AND = 교집합 / OR = 합집합
+  let allIds = [];
+  if (op === "or") {
+    const uni = new Set();
+    for (const s of idSetsPerToken) for (const v of s) uni.add(v);
+    allIds = Array.from(uni);
+  } else {
+    let idSet = idSetsPerToken[0] || new Set();
+    for (let i = 1; i < idSetsPerToken.length; i++) {
+      idSet = intersectSets(idSet, idSetsPerToken[i]);
+      if (idSet.size === 0) break;
+    }
+    allIds = Array.from(idSet);
   }
-  let allIds = Array.from(idSet);
 
   // ▶ 스마트 2등분: 공백이 없고 AND 결과 0건 → 모든 2등분 시도
-  if (allIds.length === 0 && !norm.includes(" ")) {
+  if (op === "and" && allIds.length === 0 && !norm.includes(" ")) {
     const smartIds = await trySmartSplitIds(client, norm);
     if (smartIds.length > 0) allIds = smartIds;
   }
