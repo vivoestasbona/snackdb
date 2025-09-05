@@ -118,10 +118,11 @@ export async function searchSnacks({
 }
 
 export async function loadSnackMetrics(snackIds = []) {
-  if (!snackIds?.length) return { likesMap: {}, likedSet: new Set(), avgMap: {} };
+  if (!snackIds?.length) return { likesMap: {}, likedSet: new Set(), avgMap: {}, detailMap: {}, viewsMap: {}, commentsMap: {} };
   const client = getSupabaseClient();
+  const avgMap = {};  // ✅ 추가
 
-  const [{ data: sess }, { data: likeAgg }, { data: myLikes }, { data: scoreAgg }] =
+  const [{ data: sess }, { data: likeAgg }, { data: myLikes }, { data: scoreAgg }, { data: viewsAgg, error: viewsErr }] =
     await Promise.all([
       client.auth.getSession(),
       client.from("snack_likes_count").select("snack_id,likes_count").in("snack_id", snackIds),
@@ -130,6 +131,9 @@ export async function loadSnackMetrics(snackIds = []) {
         .from("snack_scores_avg")
         .select("snack_id,avg_tasty,avg_value,avg_plenty,avg_clean,avg_addictive,review_count")
         .in("snack_id", snackIds),
+      // 선택: 조회수 집계 뷰가 있을 때만 성공, 없으면 무시
+      client.from("snack_views_count").select("snack_id,views").in("snack_id", snackIds)
+     
     ]);
 
   const likesMap = {};
@@ -138,9 +142,18 @@ export async function loadSnackMetrics(snackIds = []) {
   const uid = sess?.session?.user?.id || null;
   const likedSet = new Set(uid && myLikes ? myLikes.map(r => r.snack_id) : []);
 
-  const avgMap = {};
+  const detailMap  = {};
   for (const r of scoreAgg || []) {
     const c = Number(r.review_count) || 0;
+    // 상세 맵: 항목별 평균 + 한줄평 수
+    detailMap[r.snack_id] = {
+      tasty: +r.avg_tasty || 0,
+      value: +r.avg_value || 0,
+      plenty: +r.avg_plenty || 0,
+      clean: +r.avg_clean || 0,
+      addictive: +r.avg_addictive || 0,
+      review_count: c,
+    };
     if (c > 0) {
       const mean =
         ((+r.avg_tasty || 0) +
@@ -151,7 +164,19 @@ export async function loadSnackMetrics(snackIds = []) {
       avgMap[r.snack_id] = Number.isFinite(mean) ? +mean.toFixed(1) : undefined;
     }
   }
-  return { likesMap, likedSet, avgMap };
+  const viewsMap = {};
+  for (const v of viewsAgg || []) viewsMap[v.snack_id] = v.views || 0;
+
+  const { data: ccRows } = await client
+  .from("snack_comments_count")
+  .select("snack_id, comments_count")
+  .in("snack_id", snackIds);
+
+  const commentsMap = {};
+  for (const id of snackIds) commentsMap[id] = 0;
+  for (const r of ccRows || []) commentsMap[r.snack_id] = r.comments_count || 0;
+
+  return { likesMap, likedSet, avgMap, detailMap, viewsMap, commentsMap };
 }
 
 /* ───────────────────────── helpers ───────────────────────── */
