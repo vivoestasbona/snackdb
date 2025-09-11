@@ -74,3 +74,122 @@
   background: #f0f0f0;
 }
 
+/* ───────── 새 페이지네이션 ───────── */
+.pagerNav {
+  margin-top: 16px;
+  display: flex;
+  justify-content: center;
+}
+
+.pagerList {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  margin: 0 auto;
+  list-style: none;
+}
+
+.pagerItem a,
+.pagerItem span {
+  min-width: 36px;
+  height: 36px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fff;
+  text-decoration: none;
+  color: #111;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.pagerItem a:hover {
+  background: #f4f4f4;
+}
+
+.pagerItem span[aria-current="page"],
+.isActive > span {
+  border-color: #111;
+  background: #111;
+  color: #fff;
+  font-weight: 700;
+}
+
+.isDisabled a {
+  opacity: .45;
+  pointer-events: none;
+}
+
+.isDots {
+  min-width: 24px;
+  height: 36px;
+  color: #777;
+}
+
+/* 키보드 접근성 */
+.pagerItem a:focus-visible {
+  outline: 2px solid #000;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* 모바일 단순화: 480px 이하는 « » 숨김 */
+@media (max-width: 480px) {
+  .isBoundary { display: none; }
+  .pagerItem a, .pagerItem span {
+    min-width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    font-size: 13px;
+  }
+}
+
+/* 카드 헤더를 세로 2줄(제품명/제조사)로 고정 */
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  /* 제목 1줄 + 브랜드 1줄 높이를 확보해 행 높이가 들쭉날쭉하지 않게 */
+  min-height: 42px; /* 필요시 40~46px 사이로 미세조정 */
+}
+
+/* 제품명: 한 줄 고정 + 말줄임 */
+.title {
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 제조사: 한 줄 고정 + 말줄임 */
+.brandLine {
+  color: #666;
+  font-size: 13px;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+/* 데스크탑: 4열 고정 */
+@media (min-width: 1100px) {
+  .wrap {
+    max-width: 1240px; /* 4열+간격 여유 (원래 1100px) */
+  }
+  .grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    justify-content: stretch; /* 중앙정렬 대신 트랙 꽉 채우기 */
+  }
+  .card {
+    width: 100%;
+    max-width: none; /* 280px 상한 제거 */
+  }
+}
+

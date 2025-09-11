@@ -334,12 +334,6 @@ export default function Navbar() {
           text-decoration: none !important;
         }
 
-        /* 칩이 선택된 동안에만 텍스트/캐럿 숨김 (placeholder는 숨기지 않음) */
-        .navSearchBox.hasChips > input{
-          color: transparent;
-          caret-color: transparent;
-        }
-
       @media (min-width: 1024px){
         .inner { position: relative; }
         .navSearch {                                      /* 폼 */

@@ -17,14 +17,20 @@ export default function SnackCard({ item, avg, liked, likeCount, term, page }) {
               alt={item.name}
               loading="lazy"
               decoding="async"
-              onError={(e) => (e.currentTarget.src = "/img/placeholder.png")}
+              onError={(e) => {
+                e.currentTarget.onerror = null;
+                e.currentTarget.src =
+                  "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'/>";
+              }}
             />
           </div>
         )}
 
         <header className={styles.header}>
-          <strong>{item.name}</strong>
-          {item.brand && <span className={styles.brand}>{item.brand}</span>}
+          <div className={styles.title} title={item.name}>{item.name}</div>
+          {item.brand && (
+            <div className={styles.brandLine} title={item.brand}>{item.brand}</div>
+          )}
         </header>
 
       </a>
