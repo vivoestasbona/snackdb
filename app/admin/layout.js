@@ -6,15 +6,15 @@ import { createServerClient } from "@supabase/ssr";
 export const metadata = { title: "Admin • SnackDB" };
 
 export default async function AdminLayout({ children }) {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {
       cookies: {
         get: (name) => cookieStore.get(name)?.value,
-        set: (name, value, options) => cookieStore.set({ name, value, ...options }),
-        remove: (name, options) => cookieStore.set({ name, value: "", ...options }),
+        set: async (name, value, options) => cookieStore.set({ name, value, ...options }),
+        remove: async (name, options) => cookieStore.set({ name, value: "", ...options }),
       },
     }
   );

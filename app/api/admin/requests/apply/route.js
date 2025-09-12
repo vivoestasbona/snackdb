@@ -106,6 +106,7 @@ async function ensureUniqueSlug(admin, table, slug) {
 
   // 3) 요청/스낵 로드
   let r, snack;
+  
   try {
     const rq = await admin.from("snack_tag_requests").select("*").eq("id", id).maybeSingle();
     if (rq.error || !rq.data) return j(404, step("load_request", { error: rq.error?.message || "request not found" }));
@@ -118,22 +119,30 @@ async function ensureUniqueSlug(admin, table, slug) {
     return j(500, step("load_block", { error: String(e?.message || e) }));
   }
 
+  // 승인 시 상태 가드: pending만 허용 (요청 로드 이후로 이동)
+ if (r.status !== "pending") {
+   return j(409, step("apply_guard_status", { error: "only pending requests can be approved" }));
+ }
+
+ // 변경 통계
+ const stats = { add_flavors: 0, remove_flavors: 0, add_keywords: 0, remove_keywords: 0, add_type: 0 };
+
   // 5) 반영
   try {
     // 타입(단일)
     if (Array.isArray(r.add_types) && r.add_types.length > 0) {
       const toId = await ensureIdByName(admin, TBL.typeMaster, r.add_types[0], { withSlug: false });
-      if (toId) {
-        const up = await admin.from("snacks").update({ type_id: toId }).eq("id", r.snack_id);
-        if (up.error) throw new Error(`set type: ${up.error.message}`);
+      if (toId && toId !== snack.type_id) {                 // 같으면 No-op
+        const up = await admin.from("snacks").update({ type_id: toId }).eq("id", r.snack_id).select("id").maybeSingle();
+        if (up.data) stats.add_type = 1;
       }
     }
     if (Array.isArray(r.remove_types) && r.remove_types.length > 0 && snack.type_id) {
       const cur = await admin.from(TBL.typeMaster).select("name").eq("id", snack.type_id).maybeSingle();
       if (cur.error) throw new Error(`get type name: ${cur.error.message}`);
       if (cur.data && r.remove_types.some(n => String(n).toLowerCase() === cur.data.name.toLowerCase())) {
-        const up = await admin.from("snacks").update({ type_id: null }).eq("id", r.snack_id);
-        if (up.error) throw new Error(`unset type: ${up.error.message}`);
+        const up = await admin.from("snacks").update({ type_id: null }).eq("id", r.snack_id).select("id").maybeSingle();
+        if (up.data) stats.add_type = 0; // 타입 해제는 카운트에 포함하지 않음(원하면 별도 통계 추가)
       }
     }
 
@@ -143,8 +152,10 @@ async function ensureUniqueSlug(admin, table, slug) {
         const fid = await ensureIdByName(admin, TBL.flavorMaster, name, { withSlug: false });
         if (fid) {
           const up = await admin.from("snack_flavors_map")
-            .upsert({ snack_id: r.snack_id, flavor_id: fid }, { onConflict: "snack_id,flavor_id", ignoreDuplicates: true });
+           .upsert({ snack_id: r.snack_id, flavor_id: fid }, { onConflict: "snack_id,flavor_id", ignoreDuplicates: true })
+           .select("snack_id");                               // 실제로 새로 추가됐는지 확인
           if (up.error) throw new Error(`add flavor '${name}': ${up.error.message}`);
+          if (up.data?.length) stats.add_flavors += up.data.length;
         }
       }
     }
@@ -152,8 +163,8 @@ async function ensureUniqueSlug(admin, table, slug) {
       for (const name of r.remove_flavors) {
         const fid = await findIdByName(admin, TBL.flavorMaster, name);
         if (fid) {
-          const del = await admin.from("snack_flavors_map").delete().match({ snack_id: r.snack_id, flavor_id: fid });
-          if (del.error) throw new Error(`remove flavor '${name}': ${del.error.message}`);
+          const del = await admin.from("snack_flavors_map").delete().match({ snack_id: r.snack_id, flavor_id: fid }).select("snack_id");
+          if (del.data?.length) stats.remove_flavors += del.data.length;
         }
       }
     }
@@ -163,9 +174,10 @@ async function ensureUniqueSlug(admin, table, slug) {
       for (const name of r.add_keywords) {
         const kid = await ensureIdByName(admin, TBL.keywordMaster, name, { withSlug: true, slugFallback: "kw" });
         if (kid) {
-          const up = await admin.from("snack_keywords_map")
-            .upsert({ snack_id: r.snack_id, keyword_id: kid }, { onConflict: "snack_id,keyword_id", ignoreDuplicates: true });
-          if (up.error) throw new Error(`add keyword '${name}': ${up.error.message}`);
+            const up = await admin.from("snack_keywords_map")
+                .upsert({ snack_id: r.snack_id, keyword_id: kid }, { onConflict: "snack_id,keyword_id", ignoreDuplicates: true })
+                .select("snack_id");
+            if (up.data?.length) stats.add_keywords += up.data.length;
         }
       }
     }
@@ -173,8 +185,8 @@ async function ensureUniqueSlug(admin, table, slug) {
       for (const name of r.remove_keywords) {
         const kid = await findIdByName(admin, TBL.keywordMaster, name);
         if (kid) {
-          const del = await admin.from("snack_keywords_map").delete().match({ snack_id: r.snack_id, keyword_id: kid });
-          if (del.error) throw new Error(`remove keyword '${name}': ${del.error.message}`);
+          const del = await admin.from("snack_keywords_map").delete().match({ snack_id: r.snack_id, keyword_id: kid }).select("snack_id");
+          if (del.data?.length) stats.remove_keywords += del.data.length;
         }
       }
     }
@@ -182,13 +194,15 @@ async function ensureUniqueSlug(admin, table, slug) {
     return j(500, step("apply_changes", { error: String(e?.message || e) }));
   }
 
+  const total = Object.values(stats).reduce((a, b) => a + b, 0);
+
   // 6) 캐시 무효화
   try {
     if (snack.slug) revalidatePath(`/snacks/${snack.slug}`);
   } catch (e) {
     // 캐시 무효화 실패는 치명적이지 않음 → 경고만 전달
-    return j(200, step("done_warn_revalidate", { ok: true, slug: snack.slug, warn: String(e?.message || e) }));
+    return j(200, step("done_warn_revalidate", { ok: true, slug: snack.slug, stats, total, warn: String(e?.message || e) }));
   }
 
-  return j(200, step("done", { ok: true, slug: snack.slug }));
+  return j(200, step("done", { ok: true, slug: snack.slug, stats, total }));
 }
