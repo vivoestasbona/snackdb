@@ -1,6 +1,6 @@
 // widgets/navbar/ui/Navbar.jsx
 "use client";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import LoginModal from "@entities/user/ui/LoginModal";
@@ -9,6 +9,7 @@ import TagPickerButton from "@features/search/ui/TagPickerButton";
 
 export default function Navbar() {
   const router = useRouter();
+  const sp = useSearchParams();
   const searchRef = useRef(null);
   const opRef = useRef(null);
   const [open, setOpen] = useState(false);
@@ -108,6 +109,21 @@ export default function Navbar() {
   };
 
   const nameToShow = displayName || email || ""; // 닉네임 우선, 없으면 이메일로 잠깐 폴백
+
+  // URL 파라미터(q/op)를 네브바 인풋/hidden에 반영 → 칩 자동 표시
+ useEffect(() => {
+   const q = sp.get("q") || "";
+   const op = ((sp.get("op") || "and").toLowerCase() === "or") ? "or" : "and";
+   const el = searchRef.current;
+   if (el && el.value !== q) {
+     el.value = q;
+     // TagPickerButton이 듣는 input 이벤트 트리거
+     el.dispatchEvent(new Event("input", { bubbles: true }));
+   }
+   if (opRef.current && opRef.current.value !== op) {
+     opRef.current.value = op;
+   }
+ }, [sp]);
 
   return (
     <>

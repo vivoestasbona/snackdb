@@ -43,7 +43,7 @@ function PopChip({ label, intent, className }) {
       : `‘${label}’ 과자 모두 보기`;
 
   function go() {
-    router.push(`/search?q=${encodeURIComponent(label)}&op=and`);
+    router.push(`/search?q=${encodeURIComponent(label)}&op=and&page=1`);
     setOpen(false);
   }
 

@@ -6,7 +6,7 @@ import styles from "./page.module.css";
 import { useSearchSnacks } from "@features/search/model/useSearchSnacks";
 import SearchResults from "@features/search/ui/SearchResults";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 24;
 
 export default function SearchPage() {
   const sp = useSearchParams();
