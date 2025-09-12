@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import LikeButton from "@features/like-snack/ui/LikeButton";
 import RadarWithUser from "@features/rate-snack/ui/RadarWithUser";
 import OneLiners from "@entities/review/ui/OneLiners";
+import InfoRequestButton from "@features/snack-info-request/ui/InfoRequestButton";
 
 function useOutsideClose(ref, onClose) {
   useEffect(() => {
@@ -135,6 +136,15 @@ export default function SnackDetailView({
           {keywords.map((k) => (
             <PopChip key={k.id} label={k.name} intent="keyword" className="keyword-chip" />
           ))}
+        </div>
+
+        <div style={{marginTop: 12}}>
+          <InfoRequestButton
+            snackId={snack.id}
+            initialTypeId={snack.type?.id || ""}
+            initialFlavorIds={flavors.map(f=>f.id)}
+            initialKeywords={keywords.map(k=>k.name)}
+          />
         </div>
       </aside>
 

@@ -92,6 +92,13 @@ export default function AdminHome() {
             </div>
           </Link>
 
+          <Link href="/admin/requests" className="tile">
+            <div className="tile">
+              <strong>수정 요청</strong>
+              <span>사용자 제안 모음/승인</span>
+            </div>
+          </Link>
+
           <Link href="/admin/users" className="tile">
             <div className="tile">
               <strong>사용자 관리</strong>
