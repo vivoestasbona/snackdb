@@ -5,7 +5,7 @@ import styles from "@app/search/page.module.css";
 import { useRouter } from "next/navigation";
 
 export default function SearchResults({
-  term, page, totalPages, items, avgMap, likesMap, likedSet, op = "and",
+  term, page, totalPages, items, avgMap, likesMap, likedSet, op,
   sort = "relevance", order = "desc",
 }) {
   const router = useRouter();

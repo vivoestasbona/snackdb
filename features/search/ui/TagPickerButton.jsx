@@ -1,21 +1,101 @@
-// features/search/ui/TagPickerButton.jsx
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseClient } from "@shared/api/supabaseClient";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 
-// 실제 훅 경로
 import { useSnackFlavors } from "@features/manage-snack-categories/model/useSnackFlavors";
 import { useSnackTypes } from "@features/manage-snack-categories/model/useSnackTypes";
+import { useAvailableFlavors } from "@features/manage-snack-categories/model/useAvailableFlavors";
+import { useAvailableTypes } from "@features/manage-snack-categories/model/useAvailableTypes";
 
-export default function TagPickerButton({ anchorRef, opRef, onInsert }) {
+export default function TagPickerButton({ anchorRef, opRef, onInsert, currentTypeId }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const rootRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState("flavors"); // flavors | types | keywords
   const [filter, setFilter] = useState("");
 
-  // 맛/종류
+  // AND/OR 모드 — TDZ 방지: 먼저 선언
+  const [op, setOp] = useState("and");
+  // URL 변화에 반응해서 op 동기화
+  useEffect(() => {
+    const fromURL = (searchParams?.get("op") || "").toLowerCase();
+    if (fromURL === "and" || fromURL === "or") {
+      setOp(fromURL);
+      if (opRef?.current) opRef.current.value = fromURL;
+      if (typeof window !== "undefined") localStorage.setItem("search_op", fromURL);
+      return;
+    }
+    // URL에 없으면 마지막 선택값(localStorage) 복원
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("search_op");
+      if (saved === "and" || saved === "or") {
+        setOp(saved);
+        if (opRef?.current) opRef.current.value = saved;
+      } else {
+        setOp("and");
+        if (opRef?.current) opRef.current.value = "and";
+      }
+    }
+  }, [searchParams, opRef]);
+
+  // 마스터 로드
   const { flavors } = useSnackFlavors();
   const { types } = useSnackTypes();
+
+  // 입력창 토큰 동기화
+  const [currentTokens, setCurrentTokens] = useState([]);
+  useEffect(() => {
+    const el = anchorRef?.current;
+    if (!el) return;
+    const update = () => {
+      const arr = el.value.trim() ? el.value.trim().split(/\s+/) : [];
+      setCurrentTokens(arr);
+      el.closest(".navSearchBox")?.classList.toggle("hasChips", arr.length > 0);
+    };
+    update();
+    el.addEventListener("input", update);
+    return () => el.removeEventListener("input", update);
+  }, [anchorRef]);
+  const selectedSet = useMemo(() => new Set(currentTokens), [currentTokens]);
+
+  // 종류 이름→id 매핑 / 유추 typeId
+  const typeNameToId = useMemo(() => {
+    const m = new Map();
+    (types || []).forEach((t) => m.set(t.name, t.id));
+    return m;
+  }, [types]);
+  const derivedTypeId = useMemo(() => {
+    for (const tok of currentTokens) {
+      const id = typeNameToId.get(tok);
+      if (id) return id;
+    }
+    return null;
+  }, [currentTokens, typeNameToId]);
+  const effectiveTypeId = currentTypeId || derivedTypeId;
+
+  // 선택된 "맛"만 추려 flavor_id 배열
+  const flavorNameToId = useMemo(() => {
+    const m = new Map();
+    (flavors || []).forEach((f) => m.set(f.name, f.id));
+    return m;
+  }, [flavors]);
+  const selectedFlavorIds = useMemo(() => {
+    const arr = [];
+    for (const tok of currentTokens) {
+      const id = flavorNameToId.get(tok);
+      if (id) arr.push(id);
+    }
+    return arr;
+  }, [currentTokens, flavorNameToId]);
+
+  // 집계 훅 호출
+  const { countsMap: countsFlavors, loading: loadingFlavors } =
+    useAvailableFlavors(effectiveTypeId, selectedFlavorIds, op);
+  const { countsMap: countsTypes, loading: loadingTypes } =
+    useAvailableTypes(selectedFlavorIds, op);
 
   // 키워드(상위 사용량 순) 로드
   const [keywords, setKeywords] = useState([]);
@@ -32,108 +112,66 @@ export default function TagPickerButton({ anchorRef, opRef, onInsert }) {
         .limit(100);
       if (alive) setKeywords(data || []);
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  // 바깥 클릭/ESC 닫기 (캡처 단계 + composedPath로 오판 방지)
-  useEffect(() => {
-    if (!open) return;
-    const onDocPointerDown = (e) => {
-      const root = rootRef.current;
-      if (!root) return;
-      const path = typeof e.composedPath === "function" ? e.composedPath() : [];
-      const inside = path.includes(root) || root.contains(e.target);
-      if (!inside) setOpen(false);
-    };
-    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("pointerdown", onDocPointerDown, true);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onDocPointerDown, true);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
+  // 선택된 "종류" id들 (종류 탭 비활성화 규칙용)
+  const selectedTypeIds = useMemo(() => {
+    const arr = [];
+    for (const tok of currentTokens) {
+      const id = typeNameToId.get(tok);
+      if (id) arr.push(id);
+    }
+    return arr;
+  }, [currentTokens, typeNameToId]);
 
-  // 입력창의 현재 토큰들과 동기화 (칩 하이라이트)
-  const [currentTokens, setCurrentTokens] = useState([]);
-  useEffect(() => {
-    const el = anchorRef?.current;
-    if (!el) return;
-    const update = () => {
-      const arr = el.value.trim() ? el.value.trim().split(/\s+/) : [];
-      setCurrentTokens(arr);
-      el.closest(".navSearchBox")?.classList.toggle("hasChips", arr.length > 0);
-    };
-    update();
-    el.addEventListener("input", update);
-    return () => el.removeEventListener("input", update);
-  }, [anchorRef]);
-  const selectedSet = useMemo(() => new Set(currentTokens), [currentTokens]);
-
-  /* ── 카탈로그 통합 ─────────────────────────────────────────── */
-
-  // 맛/종류/키워드를 하나의 카탈로그로 통합(이름→id 매핑 생성)
+  // 카탈로그 통합
   const catalogAll = useMemo(() => {
     const arr = [];
-    (flavors || []).forEach(x => arr.push({ name: x.name, id: x.id }));
-    (types || []).forEach(x => arr.push({ name: x.name, id: x.id }));
-    (keywords || []).forEach(x => arr.push({ name: x.name, id: x.id }));
+    (flavors || []).forEach((x) => arr.push({ name: x.name, id: x.id }));
+    (types || []).forEach((x) => arr.push({ name: x.name, id: x.id }));
+    (keywords || []).forEach((x) => arr.push({ name: x.name, id: x.id }));
     return arr;
   }, [flavors, types, keywords]);
-
-  const catalogNameSet = useMemo(
-    () => new Set(catalogAll.map(x => x.name)),
-    [catalogAll]
-  );
-
+  const catalogNameSet = useMemo(() => new Set(catalogAll.map((x) => x.name)), [catalogAll]);
   const catalogNameToId = useMemo(() => {
     const m = new Map();
     for (const x of catalogAll) if (!m.has(x.name)) m.set(x.name, x.id);
     return m;
   }, [catalogAll]);
-
-  // 전역 선택 칩(탭과 무관)
   const selectedGlobalList = useMemo(
     () =>
       currentTokens
-        .filter(t => catalogNameSet.has(t))
-        .map(name => ({ name, id: catalogNameToId.get(name) ?? name })),
+        .filter((t) => catalogNameSet.has(t))
+        .map((name) => ({ name, id: catalogNameToId.get(name) ?? name })),
     [currentTokens, catalogNameSet, catalogNameToId]
   );
 
-  /* ── 탭 목록 & 필터 ─────────────────────────────────────────── */
-
+  // 탭/필터
   const norm = (s) => (s || "").toLowerCase().trim();
   const q = norm(filter);
-
   const baseList = useMemo(() => {
-    const src =
-      tab === "flavors" ? (flavors || [])
-      : tab === "types" ? (types || [])
-      : (keywords || []);
+    const src = tab === "flavors" ? flavors || [] : tab === "types" ? types || [] : keywords || [];
     if (!q) return src;
-    return src.filter(x => norm(x.name).includes(q));
+    return src.filter((x) => norm(x.name).includes(q));
   }, [tab, flavors, types, keywords, q]);
 
-  // 탭 내에서 선택된 항목/나머지 분리 (아래 리스트 렌더링용)
   const [selectedList, restList] = useMemo(() => {
     const sel = [];
     const rest = [];
-    for (const x of baseList) {
-      (selectedSet.has(x.name) ? sel : rest).push(x);
-    }
+    for (const x of baseList) (selectedSet.has(x.name) ? sel : rest).push(x);
     return [sel, rest];
   }, [baseList, selectedSet]);
 
-  /* ── 액션들 ───────────────────────────────────────────────── */
-
-  // 토큰 토글(없으면 추가, 있으면 제거)
+  // 토큰 토글
   const toggleToken = (name) => {
     const tok = (name || "").trim();
     if (!tok) return;
 
     if (typeof onInsert === "function") {
-      onInsert(tok); // 필요 시 상위에서 처리
+      onInsert(tok);
       return;
     }
 
@@ -141,43 +179,33 @@ export default function TagPickerButton({ anchorRef, opRef, onInsert }) {
     if (!el) return;
 
     let tokens = el.value.trim() ? el.value.trim().split(/\s+/) : [];
-    if (tokens.includes(tok)) {
-      tokens = tokens.filter(t => t !== tok); // 제거
-    } else {
-      tokens.push(tok); // 추가
-    }
-    el.value = tokens.join(" ");
-    el.dispatchEvent(new Event("input", { bubbles: true })); // controlled 대응
-    // 팝업은 열어둠(연속 선택)
-  };
-
-  // 선택 칩 모두 지우기(카탈로그에 있는 칩만 제거, 자유 텍스트 보존)
-  const clearSelectedChips = () => {
-    const el = anchorRef?.current;
-    if (!el) return;
-    let tokens = el.value.trim() ? el.value.trim().split(/\s+/) : [];
-    const selectedChipSet = new Set(tokens.filter(t => catalogNameSet.has(t)));
-    if (selectedChipSet.size === 0) return;
-    tokens = tokens.filter(t => !selectedChipSet.has(t));
+    if (tokens.includes(tok)) tokens = tokens.filter((t) => t !== tok);
+    else tokens.push(tok);
     el.value = tokens.join(" ");
     el.dispatchEvent(new Event("input", { bubbles: true }));
   };
 
-  // AND/OR 모드
-  const [op, setOp] = useState("and");
-  useEffect(() => {
-    const fromHidden = opRef?.current?.value;
-    const fromURL = typeof window !== "undefined"
-        ? new URLSearchParams(window.location.search).get("op")
-        : null;
-    const v = (fromHidden || fromURL || "and").toLowerCase();
-    setOp(v === "or" ? "or" : "and");
-    }, []);
-  useEffect(() => {
-    if (opRef?.current) opRef.current.value = op;
-  }, [op, opRef]);
+  const clearSelectedChips = () => {
+    const el = anchorRef?.current;
+    if (!el) return;
+    let tokens = el.value.trim() ? el.value.trim().split(/\s+/) : [];
+    const selectedChipSet = new Set(tokens.filter((t) => catalogNameSet.has(t)));
+    if (!selectedChipSet.size) return;
+    tokens = tokens.filter((t) => !selectedChipSet.has(t));
+    el.value = tokens.join(" ");
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  };
 
-  /* ── UI ───────────────────────────────────────────────────── */
+  const setOpAndSync = (next) => {
+    const val = next === "or" ? "or" : "and";
+    setOp(val);
+    if (opRef?.current) opRef.current.value = val;
+    if (typeof window !== "undefined") localStorage.setItem("search_op", val);
+    // 현재 쿼리 유지 + op만 갱신
+    const params = new URLSearchParams(searchParams?.toString());
+    params.set("op", val); // and/or 모두 명시적으로 보존
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
 
   return (
     <div className="tagpick" ref={rootRef}>
@@ -185,7 +213,7 @@ export default function TagPickerButton({ anchorRef, opRef, onInsert }) {
         type="button"
         className="tp-btn"
         aria-expanded={open}
-        onClick={() => setOpen(v => !v)}
+        onClick={() => setOpen((v) => !v)}
         title="태그 추가"
       >
         <span aria-hidden>🏷️</span>
@@ -193,27 +221,31 @@ export default function TagPickerButton({ anchorRef, opRef, onInsert }) {
 
       {open && (
         <div className="tp-pop" role="dialog" aria-label="태그 선택">
-          {/* 헤더: 좌측 상태/액션, 우측 닫기 */}
+          {/* 헤더 */}
           <div className="tp-actions">
             <div className="tp-actions-left">
               <span className="tp-count">선택 {selectedGlobalList.length}</span>
-              {/* 👇 AND / OR 토글 */}
+
+              {/* AND / OR 토글 */}
               <div className="tp-op" role="group" aria-label="검색 결합 방식">
                 <button
                   type="button"
-                  className={`tp-op-btn ${op==="and"?"on":""}`}
-                  aria-pressed={op==="and"}
-                  onClick={()=>setOp("and")}
-                  title="그리고(AND)"
-                >그리고</button>
+                  className={`tp-op-btn ${op === "and" ? "on" : ""}`}
+                  aria-pressed={op === "and"}
+                  onClick={() => setOpAndSync("and")}
+                >
+                  그리고
+                </button>
                 <button
                   type="button"
-                  className={`tp-op-btn ${op==="or"?"on":""}`}
-                  aria-pressed={op==="or"}
-                  onClick={()=>setOp("or")}
-                  title="또는(OR)"
-                >또는</button>
+                  className={`tp-op-btn ${op === "or" ? "on" : ""}`}
+                  aria-pressed={op === "or"}
+                  onClick={() => setOpAndSync("or")}
+                >
+                  또는
+                </button>
               </div>
+
               <button
                 type="button"
                 className="tp-clear"
@@ -223,28 +255,24 @@ export default function TagPickerButton({ anchorRef, opRef, onInsert }) {
                 모두 지우기
               </button>
             </div>
+
             <div className="tp-actions-right">
-              <button
-                type="button"
-                className="tp-close"
-                onClick={() => setOpen(false)}
-                aria-label="닫기"
-              >
+              <button type="button" className="tp-close" onClick={() => setOpen(false)} aria-label="닫기">
                 ×
               </button>
             </div>
           </div>
 
-          {/* 전역 선택 칩: 탭과 무관하게 항상 상단 고정 */}
+          {/* 전역 선택 칩 */}
           {!!selectedGlobalList.length && (
             <div className="tp-selected">
-              {selectedGlobalList.map(x => (
+              {selectedGlobalList.map((x) => (
                 <button
                   type="button"
                   key={`sel-${x.id}`}
                   className="tp-chip on"
                   aria-pressed="true"
-                  onClick={() => toggleToken(x.name)} // 다시 눌러 제거
+                  onClick={() => toggleToken(x.name)}
                 >
                   {x.name}
                 </button>
@@ -252,41 +280,60 @@ export default function TagPickerButton({ anchorRef, opRef, onInsert }) {
             </div>
           )}
 
-          {/* 탭 스위처 */}
+          {/* 탭 */}
           <div className="tp-tabs">
-            <button type="button" className={tab === "flavors" ? "on" : ""} onClick={() => setTab("flavors")}>맛</button>
-            <button type="button" className={tab === "types" ? "on" : ""} onClick={() => setTab("types")}>종류</button>
-            <button type="button" className={tab === "keywords" ? "on" : ""} onClick={() => setTab("keywords")}>키워드</button>
+            <button type="button" className={tab === "flavors" ? "on" : ""} onClick={() => setTab("flavors")}>
+              맛
+            </button>
+            <button type="button" className={tab === "types" ? "on" : ""} onClick={() => setTab("types")}>
+              종류
+            </button>
+            <button type="button" className={tab === "keywords" ? "on" : ""} onClick={() => setTab("keywords")}>
+              키워드
+            </button>
           </div>
 
-          {/* 필터 입력 */}
+          {/* 필터 */}
           <div className="tp-filter">
-            <input
-              placeholder="필터 검색"
-              value={filter}
-              onChange={e => setFilter(e.target.value)}
-            />
+            <input placeholder="필터 검색" value={filter} onChange={(e) => setFilter(e.target.value)} />
           </div>
 
-          {/* 탭 리스트(선택된 건 위로 고정되었으므로 여기엔 나머지 위주) */}
+          {/* 목록 */}
           <div className="tp-list">
             {restList.map((x) => {
               const on = selectedSet.has(x.name);
+              let disabled = false;
+
+              if (tab === "flavors") {
+                // 로딩 중에는 비활성화하지 않음 → 깜빡임 방지
+                disabled = op === "and" && !loadingFlavors ? (countsFlavors?.[x.id] || 0) === 0 : false;
+              } else if (tab === "types") {
+                if (op === "and") {
+                  if (selectedTypeIds.length > 0) {
+                    // 타입 하나라도 선택되어 있으면, 그 외 타입은 전부 비활성화 (type은 단일)
+                    disabled = !selectedTypeIds.includes(x.id);
+                  } else {
+                    // 맛만 선택한 상태: 가능한 타입만 활성
+                    disabled = !loadingTypes && (countsTypes?.[x.id] || 0) === 0;
+                  }
+                }
+              }
+
               return (
                 <button
                   type="button"
                   key={x.id}
-                  className={`tp-chip${on ? " on" : ""}`}
+                  className={`tp-chip${on ? " on" : ""}${disabled ? " disabled" : ""}`}
                   aria-pressed={on}
-                  onClick={() => toggleToken(x.name)}
+                  onClick={() => !disabled && toggleToken(x.name)}
+                  disabled={disabled}
                 >
                   {x.name}
                 </button>
               );
             })}
-            {!restList.length && !selectedList.length && (
-              <div className="tp-empty">결과 없음</div>
-            )}
+
+            {!restList.length && !selectedList.length && <div className="tp-empty">결과 없음</div>}
           </div>
         </div>
       )}
@@ -364,6 +411,9 @@ export default function TagPickerButton({ anchorRef, opRef, onInsert }) {
         }
         .tp-pop .tp-chip.on{
           background:#000 !important; color:#fff !important; border-color:#000 !important;
+        }
+        .tp-pop .tp-chip.disabled{
+          opacity:.45; cursor:not-allowed; background:#f8f8f8 !important; color:#999 !important; border-color:#eee !important;
         }
 
         .tp-empty{ color:#777; font-size:13px; padding:8px; }

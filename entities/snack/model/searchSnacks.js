@@ -14,6 +14,10 @@ export async function searchSnacks({
   const norm = normalizeTerm(term);
   const tokens = tokenize(norm); // 공백 기반 토큰
   const op = (operator || "and").toLowerCase() === "or" ? "or" : "and";
+  const { data: _typeNames } = tokens.length
+    ? await client.from("snack_types").select("name").in("name", tokens)
+    : { data: [] };
+  const typeTokenSet = new Set((_typeNames || []).map(r => r.name));
 
   // ▶ term 없음 → 서버 페이지네이션
   if (tokens.length === 0) {
@@ -49,6 +53,9 @@ export async function searchSnacks({
   await Promise.all(idSetsPerToken.map(async (set, i) => {
     const tok = tokens[i];
     const isShort = [...tok].length <= 3;
+    if (typeTokenSet.has(tok)) {
+      return;
+    }
     if (isShort) {
       const fuzzy = await getSnackIdSetForTokenFuzzy(client, tok, 200);
       const lev1  = await getSnackIdSetForTokenLev1(client, tok, 200);
@@ -205,7 +212,11 @@ async function getSnackIdSetForToken(client, token) {
     .eq("is_public", true)
     .or(`name.ilike.${like},brand.ilike.${like},slug.ilike.${like}`);
 
-  const { data: typeRows } = await client.from("snack_types").select("id").ilike("name", like);
+  const { data: typeRows } = await client
+    .from("snack_types")
+    .select("id")
+    .eq("name", token);
+
   let typeSnackRows = [];
   if (typeRows?.length) {
     const { data } = await client
@@ -214,6 +225,8 @@ async function getSnackIdSetForToken(client, token) {
       .eq("is_public", true)
       .in("type_id", typeRows.map(r => r.id));
     typeSnackRows = data || [];
+
+    return new Set((typeSnackRows || []).map(r => r.id));
   }
 
   const { data: fRows } = await client.from("snack_flavors").select("id").ilike("name", like);
@@ -308,14 +321,19 @@ async function fallbackWholeStringIds(client, whole, maxIds = 1000) {
       .select("id")
       .eq("is_public", true)
       .or(`name.ilike.${like},brand.ilike.${like},slug.ilike.${like}`),
-    client.from("snack_types").select("id").ilike("name", like),
+    client.from("snack_types").select("id").eq("name", whole),
     client.from("snack_flavors").select("id").ilike("name", like),
     client.from("snack_keywords").select("id").eq("is_active", true).ilike("name", like),
   ]);
 
-  const typeSnackIds = (typeRows?.length
-    ? (await client.from("snacks").select("id").eq("is_public", true).in("type_id", typeRows.map(r => r.id))).data || []
-    : []);
+  if (typeRows?.length) {
+    const { data } = await client
+      .from("snacks")
+      .select("id")
+      .eq("is_public", true)
+      .in("type_id", typeRows.map(r => r.id));
+    return (data || []).map(r => r.id).slice(0, Math.max(1, maxIds | 0));
+  }
   const flavorSnackIds = (flavorRows?.length
     ? ((await client.from("snack_flavors_map").select("snack_id").in("flavor_id", flavorRows.map(r => r.id))).data || []).map(r => ({ id: r.snack_id }))
     : []);
@@ -325,7 +343,6 @@ async function fallbackWholeStringIds(client, whole, maxIds = 1000) {
 
   const set = new Set([
     ...(baseRows || []).map(r => r.id),
-    ...typeSnackIds.map(r => r.id),
     ...flavorSnackIds.map(r => r.id),
     ...kwSnackIds.map(r => r.id),
   ]);

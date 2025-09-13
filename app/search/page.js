@@ -41,6 +41,7 @@ export default function SearchPage() {
         likedSet={likedSet} 
         sort={sort}
         order={order}
+        op={op}
         />
       )}
     </section>
