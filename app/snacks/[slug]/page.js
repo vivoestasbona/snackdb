@@ -9,13 +9,14 @@ import { redirect, notFound } from "next/navigation";
 import { getSupabaseServer } from "@shared/api/supabase/server";
 
 export async function generateMetadata({ params }) {
-  const { slug: raw } = await params;
+  const p = await params;
+  const { slug: raw } = p ?? {};
   const slug = decodeURIComponent(String(raw)).normalize("NFC").toLowerCase();
   const { snack, avg } = await getBySlugOrId(slug);
   if (snack) return snackMetadata(snack, avg);
 
   // 히스토리에서 현재 slug 찾아 메타 생성
-  const sb = getSupabaseServer();
+  const sb = await getSupabaseServer();
   const { data: hist } = await sb
     .from("snack_slug_history").select("snack_id").eq("old_slug", slug).single();
   if (hist?.snack_id) {
@@ -30,9 +31,10 @@ export async function generateMetadata({ params }) {
 }
 
 export default async function Page({ params, searchParams }) {
-  const { slug: raw } = await params;
+  const p = await params; 
+  const { slug: raw } = p ?? {};
   const slug = decodeURIComponent(String(raw)).normalize("NFC").toLowerCase();
-  const sp = (await searchParams) || {};
+  const sp = (await searchParams) ?? {};   
   const preview = sp.preview != null && sp.preview !== "0" && sp.preview !== "false";
 
   // ✅ 미리보기는 서버 조회 전에 바로 클라이언트 미리보기로
@@ -43,7 +45,7 @@ export default async function Page({ params, searchParams }) {
   // 🔽 일반 공개 흐름만 서버에서 조회/리다이렉트 처리
   const { snack, avg, flavors, keywords } = await getBySlugOrId(slug);
   if (!snack) {
-    const sb = getSupabaseServer();
+    const sb = await getSupabaseServer();
     const { data: hist, error: histErr } = await sb
       .from("snack_slug_history")
       .select("snack_id")

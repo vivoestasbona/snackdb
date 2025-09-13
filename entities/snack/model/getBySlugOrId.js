@@ -5,8 +5,8 @@ import { permanentRedirect } from "next/navigation";
 /**
  * slug 또는 id로 과자를 조회하고, 평균 점수 + 맛 목록까지 반환
  */
-export async function getBySlugOrId(slugOrId) {
-  const sb = getSupabaseServer();
+export async function getBySlugOrId(slugOrId, opts = {}) {
+  const sb = opts.sb || (await getSupabaseServer());
 
   // URL 파라미터 정규화
   const key = decodeURIComponent(slugOrId || "");
