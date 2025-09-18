@@ -17,6 +17,42 @@ export default function TagPickerButton({ anchorRef, opRef, onInsert, currentTyp
   const [tab, setTab] = useState("flavors"); // flavors | types | keywords
   const [filter, setFilter] = useState("");
 
+  /* 추가 1: 모달 바깥 클릭(터치 포함) 시 닫기 */
+  useEffect(() => {
+    if (!open) return;
+
+    const handleOutside = (e) => {
+      const root = rootRef.current;
+      const anchor = anchorRef?.current;
+      const target = e.target;
+
+      // 내부 클릭(모달/트리거 버튼) 은 무시
+      if (root?.contains(target)) return;
+      if (anchor && anchor.contains && anchor.contains(target)) return;
+
+      setOpen(false);
+    };
+
+    // 캡처 단계에서 먼저 잡아주면 내부 컴포넌트가 stopPropagation 해도 동작
+    document.addEventListener("mousedown", handleOutside, true);
+    document.addEventListener("touchstart", handleOutside, true);
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutside, true);
+      document.removeEventListener("touchstart", handleOutside, true);
+    };
+  }, [open, anchorRef]);
+
+  /* Esc 키로 닫기 */
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+
   // AND/OR 모드 — TDZ 방지: 먼저 선언
   const [op, setOp] = useState("and");
   // URL 변화에 반응해서 op 동기화

@@ -19,6 +19,17 @@ export async function searchSnacks({
     : { data: [] };
   const typeTokenSet = new Set((_typeNames || []).map(r => r.name));
 
+  const { data: _flavorNames } = tokens.length
+   ? await client.from("snack_flavors").select("name").in("name", tokens)
+   : { data: [] };
+  const flavorTokenSet = new Set((_flavorNames || []).map(r => r.name));
+
+  const { data: _keywordNames } = tokens.length
+    ? await client.from("snack_keywords").select("name").eq("is_active", true).in("name", tokens)
+    : { data: [] };
+  const keywordTokenSet = new Set((_keywordNames || []).map(r => r.name));
+
+
   // ▶ term 없음 → 서버 페이지네이션
   if (tokens.length === 0) {
     const { data: rows, error, count: total } = await client
@@ -53,7 +64,7 @@ export async function searchSnacks({
   await Promise.all(idSetsPerToken.map(async (set, i) => {
     const tok = tokens[i];
     const isShort = [...tok].length <= 3;
-    if (typeTokenSet.has(tok)) {
+    if (typeTokenSet.has(tok) || flavorTokenSet.has(tok) || keywordTokenSet.has(tok)) {
       return;
     }
     if (isShort) {
@@ -229,36 +240,34 @@ async function getSnackIdSetForToken(client, token) {
     return new Set((typeSnackRows || []).map(r => r.id));
   }
 
-  const { data: fRows } = await client.from("snack_flavors").select("id").ilike("name", like);
-  let flavorSnackRows = [];
+  // 🔒 FLAVOR: 태그로 선택된 경우 "정확 일치"로만 필터하고, 매칭되면 즉시 반환(태그 전용)
+  const { data: fRows } = await client
+    .from("snack_flavors")
+    .select("id")
+    .eq("name", token);
   if (fRows?.length) {
     const { data } = await client
       .from("snack_flavors_map")
       .select("snack_id")
       .in("flavor_id", fRows.map(r => r.id));
-    flavorSnackRows = (data || []).map(r => ({ id: r.snack_id }));
+    return new Set((data || []).map(r => r.snack_id));
   }
 
+  // 🔒 KEYWORD: 태그로 선택된 경우 "정확 일치"로만 필터하고, 매칭되면 즉시 반환(태그 전용)
   const { data: kRows } = await client
     .from("snack_keywords")
     .select("id")
     .eq("is_active", true)
-    .ilike("name", like);
-  let keywordSnackRows = [];
+    .eq("name", token);
   if (kRows?.length) {
     const { data } = await client
       .from("snack_keywords_map")
       .select("snack_id")
       .in("keyword_id", kRows.map(r => r.id));
-    keywordSnackRows = (data || []).map(r => ({ id: r.snack_id }));
+    return new Set((data || []).map(r => r.snack_id));
   }
 
-  return new Set([
-    ...(baseIds || []).map(r => r.id),
-    ...(typeSnackRows || []).map(r => r.id),
-    ...(flavorSnackRows || []).map(r => r.id),
-    ...(keywordSnackRows || []).map(r => r.id),
-  ]);
+  return new Set([...(baseIds || []).map(r => r.id)]);
 }
 
 function thresholdByLen(s) {
