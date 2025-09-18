@@ -14,34 +14,34 @@ export default function SearchPage() {
   const page = Number(sp.get("page") ?? "1") || 1;
   const op = ((sp.get("op") ?? "and").toLowerCase() === "or") ? "or" : "and";
   const rawSort = (sp.get("sort") ?? "relevance").toLowerCase();
-  const sort = ["name", "recent", "views"].includes(rawSort) ? "relevance" : rawSort;
-  const order = (sp.get("order") ?? "desc").toLowerCase(); // asc|desc
+  const order = (sp.get("order") ?? "desc").toLowerCase() === "asc" ? "asc" : "desc";
+  const sort = ["relevance","likes","avg","tasty","value","plenty","clean","addictive","comments"].includes(rawSort)
+    ? rawSort : "relevance";
 
-  const { loading, items, totalPages, avgMap, likesMap, likedSet } =
-    useSearchSnacks({ term, page, pageSize: PAGE_SIZE, operator: op, sort, order });
+  console.log("[DBG] /search params", { op, term, page, sort, order });
 
+  const { loading, items, total, avgMap, likesMap, likedSet } = useSearchSnacks({
+    term, page, pageSize: PAGE_SIZE, operator: op, sort, order
+  });
+
+  const totalPages = Math.max(1, Math.ceil((total || 0) / PAGE_SIZE));
 
   return (
-    <section className={styles.wrap}>
-      <div className={styles.head}>
-        <h1>검색 결과</h1>
-        {term && <p>검색어: <strong>{term}</strong></p>}
-      </div>
-
+    <section className={styles.search}>
       {loading ? (
-        <div className={styles.empty}>불러오는 중…</div>
+        <div className={styles.loading}>Loading…</div>
       ) : (
-        <SearchResults 
-        term={term} 
-        page={page} 
-        totalPages={totalPages} 
-        items={items}
-        avgMap={avgMap} 
-        likesMap={likesMap} 
-        likedSet={likedSet} 
-        sort={sort}
-        order={order}
-        op={op}
+        <SearchResults
+          term={term}
+          page={page}
+          totalPages={totalPages}
+          items={items}
+          avgMap={avgMap}
+          likesMap={likesMap}
+          likedSet={likedSet}
+          sort={sort}
+          order={order}
+          op={op}
         />
       )}
     </section>

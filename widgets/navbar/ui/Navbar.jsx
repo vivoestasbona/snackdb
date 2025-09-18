@@ -115,6 +115,14 @@ export default function Navbar() {
     };
   }, []);
 
+  useEffect(() => {
+    const sp = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+    const fromURL = sp?.get("op");
+    const saved = (typeof window !== "undefined" ? localStorage.getItem("search_op") : null);
+    const val = ((fromURL || saved || "and").toLowerCase() === "or") ? "or" : "and";
+    if (opRef.current) opRef.current.value = val;
+  }, []);
+
   const handleLogout = async () => {
     const client = getSupabaseClient();
     await client.auth.signOut();
@@ -189,6 +197,7 @@ export default function Navbar() {
     setTokens(parts);
     syncHiddenFromTokens(parts);
     if (opRef.current && opRef.current.value !== op) opRef.current.value = op;
+    console.log("[DBG] Navbar.useEffect(sp)", { url_op: op, opRef: opRef.current?.value, q });
     setTyping("");
     setShowAll(false);
   }, [sp]);
@@ -212,6 +221,52 @@ export default function Navbar() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  useEffect(() => {
+    const sp = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+    const fromURL = sp?.get("op");
+    const saved = (typeof window !== "undefined" ? localStorage.getItem("search_op") : null);
+    const val = ((fromURL || saved || "and").toLowerCase() === "or") ? "or" : "and";
+    if (opRef.current) opRef.current.value = val;
+  }, []);
+
+  // ✅ 제출 로직을 함수로 분리(폼 onSubmit, 버튼 onClick 양쪽에서 사용)
+  function handleSearchSubmit(e) {
+    e?.preventDefault?.();
+
+    // 제출 직전 타이핑 텍스트를 토큰으로 편입
+    const tail = (typing || "").trim();
+    const finalTokens = tail ? [...tokens, tail] : tokens;
+    const qStr = finalTokens.join(" ");
+    if (searchRef.current) searchRef.current.value = qStr;
+    const v = qStr;
+
+    // ✅ 우선순위: URL → hidden input(opRef) → localStorage
+    const byURL =
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("op")
+        : null;
+
+    const byRef =
+      opRef.current?.value ??
+      (e?.currentTarget?.elements?.namedItem?.("op")?.value ?? undefined);
+
+    const bySaved =
+      typeof window !== "undefined"
+        ? localStorage.getItem("search_op")
+        : null;
+
+    const op =
+      ((byURL ?? byRef ?? bySaved ?? "and").toLowerCase() === "or")
+        ? "or"
+        : "and";
+
+    console.log("[DBG] Navbar.submit", { byRef, byURL, bySaved, final: op, q: v });
+
+    const base = v ? `/search?q=${encodeURIComponent(v)}&page=1` : `/search?page=1`;
+    router.push(`${base}&op=${op}`);
+    setTyping("");
+  }
+
   return (
     <>
       <header className="nav">
@@ -222,19 +277,7 @@ export default function Navbar() {
 
           <form
             className="navSearch"
-            onSubmit={(e) => {
-              e.preventDefault();
-              // 제출 직전 타이핑 텍스트를 토큰으로 편입
-              const tail = typing.trim();
-              const finalTokens = tail ? [...tokens, tail] : tokens;
-              const qStr = finalTokens.join(" ");
-              if (searchRef.current) searchRef.current.value = qStr;
-              const v = qStr;
-              const op = (e.currentTarget.op?.value || "and").toLowerCase() === "or" ? "or" : "and";
-              const base = v ? `/search?q=${encodeURIComponent(v)}&page=1` : `/search?page=1`;
-              router.push(`${base}&op=${op}`);
-              setTyping("");
-            }}
+            onSubmit={(e) => handleSearchSubmit(e)}
           >
             <div className="navSearchBox">
               {/* 오프스크린 텍스트 인풋: TagPicker가 focus/입력 이벤트를 정상 사용 */}
@@ -255,7 +298,7 @@ export default function Navbar() {
                 }}
               >
                 {(() => {
-                  const MAX = 1; // ✅ 1개만 표시
+                  const MAX = 1; // 1개만 표시
                   const total = tokens.length;
                   const visible = tokens.slice(0, MAX);
                   return (
@@ -268,7 +311,7 @@ export default function Navbar() {
                             className={`chip ${cls} clickable`}
                             key={`${t}-${idx}`}
                             title="검색 토큰"
-                            onClick={() => setShowAll((v) => !v)}   // ✅ 칩 전체 클릭으로 팝오버 토글
+                            onClick={() => setShowAll((v) => !v)}   // 칩 전체 클릭으로 팝오버 토글
                           >
                             <span className="chipText">
                               {t}
@@ -309,14 +352,13 @@ export default function Navbar() {
                   onKeyDown={(e) => {
                     // Enter/Space/Comma → 토큰 확정
                     if (["Enter", " ", ","].includes(e.key)) {
-                      const cand = typing.trim();
+                      const cand = (typing || "").trim();
                       if (cand) addToken(cand);
                       e.preventDefault();
                       return;
                     }
                     // 백스페이스: 비어 있을 때 마지막 칩 삭제
                     if (e.key === "Backspace" && typing === "" && tokens.length) {
-                      // 마지막 토큰 제거(요약 칩이 있어도 실제 배열 기준)
                       const idx = tokens.length - 1;
                       const next = tokens.slice(0, idx);
                       setTokensSafe(next);
@@ -334,44 +376,17 @@ export default function Navbar() {
                   }}
                 />
               </div>
-              {showAll && (
-                <>
-                  <div className="popMask" onClick={() => setShowAll(false)} />
-                  <div className="tokenPopover" ref={popRef} role="dialog" aria-label="전체 검색어">
-                    <div className="tokenHead">
-                      <span>전체 검색어 <span className="count">{tokens.length}</span></span>
-                      <button type="button" className="popClose" aria-label="닫기" onClick={() => setShowAll(false)}>×</button>
-                    </div>
-                    <div className="tokenList">
-                      {tokens.map((t, i) => (
-                        <span
-                          key={`${t}-${i}`}
-                          className={`chip ${chipClass(t)} clickable`}
-                          title="클릭하면 삭제"
-                          onClick={() => removeTokenAt(i)}              // ✅ 팝오버 내 토큰 칩 전체 클릭 = 삭제
-                        >
-                          <span className="chipText">{t}</span>
-                          <button
-                            type="button"
-                            className="chipX"
-                            aria-label={`${t} 삭제`}
-                            onClick={(e) => { e.stopPropagation(); removeTokenAt(i); }} // ✅ X도 그대로 작동
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
 
+              {/* 태그 버튼 */}
+              <TagPickerButton anchorRef={searchRef} opRef={opRef} />
+
+              {/* op hidden */}
               <input type="hidden" name="op" defaultValue="and" ref={opRef} />
-              <button type="submit" aria-label="검색">
+
+              {/* 검색 버튼: onClick도 handleSearchSubmit 연결 */}
+              <button type="submit" aria-label="검색" onClick={(e) => handleSearchSubmit(e)}>
                 <span aria-hidden>🔍</span>
               </button>
-
-              <TagPickerButton anchorRef={searchRef} opRef={opRef} />
             </div>
           </form>
 
