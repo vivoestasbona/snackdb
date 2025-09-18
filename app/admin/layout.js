@@ -2,6 +2,7 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import AdminTabs from "@shared/ui/AdminTabs";
 
 export const metadata = { title: "Admin • SnackDB" };
 
@@ -37,5 +38,12 @@ export default async function AdminLayout({ children }) {
     redirect("/403");
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <AdminTabs />
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 16px" }}>
+        {children}
+      </div>
+    </>
+  );
 }

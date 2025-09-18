@@ -8,9 +8,11 @@ import { getSupabaseClient } from "@shared/api/supabaseClient";
 import DeleteButton from "@features/delete-snacks/ui/DeleteButton";
 import { deleteSnacks } from "@features/delete-snacks/model/deleteSnacks";
 import RowActions from "@widgets/admin-snack-list/ui/RowActions";
+import Pager from "@shared/ui/Pager";
 
 const PAGE_SIZE = 20;
 const VIS_COL = "is_public"; // 공개/비공개 컬럼
+
 
 export default function SnackListPage() {
   const router = useRouter();
@@ -24,6 +26,17 @@ export default function SnackListPage() {
   const [items, setItems] = useState([]);
   const [count, setCount] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
+
+  const makeHref = (p) => {
+    const usp = new URLSearchParams();
+    if (q) usp.set("q", q);
+    usp.set("page", String(p));
+    // 필요한 추가 파라미터가 있으면 여기에 (예: sort, order 등)
+    return `/admin/snacks?${usp.toString()}`;
+  };
+
 
   // 뷰 토글: 'list' | 'grid'
   const [view, setView] = useState("list");
@@ -366,14 +379,7 @@ export default function SnackListPage() {
             </div>
           )}
 
-          <div className="pager">
-            <button onClick={() => gotoPage(Math.max(1, page - 1))} disabled={page <= 1}>이전</button>
-            <span>{page}</span>
-            <button
-              onClick={() => gotoPage(page + 1)}
-              disabled={count != null ? page * PAGE_SIZE >= count : items.length < PAGE_SIZE}
-            >다음</button>
-          </div>
+          <Pager page={page} totalPages={totalPages} makeHref={makeHref} />
         </>
       )}
 
