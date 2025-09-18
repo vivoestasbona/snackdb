@@ -61,7 +61,7 @@ export default function LikeButton({ snackId }) {
       aria-pressed={liked}
       aria-label={`좋아요 ${count}개`}
     >
-      <span className="icon" aria-hidden>♥</span>
+      <span className="icon" aria-hidden>♡</span>
       <span className="count">{count}</span>
       <style jsx>{`
         .like {

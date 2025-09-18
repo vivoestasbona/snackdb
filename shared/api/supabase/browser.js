@@ -1,6 +1,6 @@
 // shared/api/supabase/browser.js
 "use client";
-import { createClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
 
 let cached = null;
 
@@ -21,7 +21,7 @@ export function getSupabaseClient(opts = {}) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  const client = createClient(url, key, {
+  const client = createBrowserClient(url, key, {
     auth: {
       persistSession: true,      // 브라우저는 세션 유지
       storage,

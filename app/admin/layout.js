@@ -1,8 +1,41 @@
 // app/admin/layout.js
-export const metadata = {
-  title: "Admin • SnackDB",
-};
+import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
 
-export default function AdminLayout({ children }) {
-  return children; // 필요시 여기서 관리자 공통 UI 래핑 가능
+export const metadata = { title: "Admin • SnackDB" };
+
+export default async function AdminLayout({ children }) {
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        get: (name) => cookieStore.get(name)?.value,
+        set: async (name, value, options) => cookieStore.set({ name, value, ...options }),
+        remove: async (name, options) => cookieStore.set({ name, value: "", ...options }),
+      },
+    }
+  );
+
+  // 1) 로그인 확인
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    // NOTE: /login 페이지가 없다면 홈으로 보냅니다.
+    redirect("/"); // 필요하면 "/?showLogin=1"
+  }
+
+  // 2) 관리자 권한 확인
+  const { data: prof } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (prof?.role !== "admin") {
+    redirect("/403");
+  }
+
+  return <>{children}</>;
 }
