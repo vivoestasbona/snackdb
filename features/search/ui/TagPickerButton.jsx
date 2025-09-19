@@ -216,7 +216,7 @@ export default function TagPickerButton({ anchorRef, opRef, onInsert, currentTyp
       </button>
 
       {open && (
-        <div className="tp-pop" role="dialog" aria-label="태그 선택">
+        <div className="tp-pop" role="dialog" aria-label="태그 선택"> 직접 변경(토
           <div className="tp-actions">
             <div className="tp-actions-left">
               <span className="tp-count">선택 {currentTokens.length}</span>
