@@ -22,7 +22,7 @@ export default function TagPickerButton({ anchorRef, opRef, onInsert, currentTyp
   const [tab, setTab] = useState("flavors");  // flavors | types | keywords
   const [filter, setFilter] = useState("");
 
-  // ===== AND/OR: state를 단일 소스로 유지 =====
+  // ===== AND/OR: state 단일 소스 =====
   const [op, setOp] = useState(() => {
     const refVal = opRef?.current?.value?.toLowerCase?.();
     if (refVal === "and" || refVal === "or") return refVal;
@@ -35,7 +35,7 @@ export default function TagPickerButton({ anchorRef, opRef, onInsert, currentTyp
     return "and";
   });
 
-  // URL/저장소 → state 동기화(값이 바뀔 때만)
+  // URL/저장소 → state 동기화
   useEffect(() => {
     const fromURL = (searchParams?.get("op") || "").toLowerCase();
     let next =
@@ -54,8 +54,11 @@ export default function TagPickerButton({ anchorRef, opRef, onInsert, currentTyp
   useEffect(() => {
     if (!pathname?.startsWith?.("/search")) return;
     if (!searchParams?.get("op")) {
-      const params = new URLSearchParams(searchParams?.toString());
-      params.set("op", normalizeOp(op));
+      const raw = typeof window !== "undefined" ? window.location.search : (searchParams?.toString() || "");
+      const params = new URLSearchParams(raw);
+      const refVal = (opRef?.current?.value || "").toLowerCase();
+      const chosen = (refVal === "or" || refVal === "and") ? refVal : normalizeOp(op);
+      params.set("op", chosen);
       router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     }
   }, [pathname, searchParams, op, router]);
@@ -85,7 +88,9 @@ export default function TagPickerButton({ anchorRef, opRef, onInsert, currentTyp
   useEffect(() => {
     const el = anchorRef?.current; if (!el) return;
     const update = () => {
-      const arr = el.value.trim() ? el.value.trim().split(/\s+/) : [];
+      const arr = el.value !== undefined && el.value !== null
+        ? (String(el.value).length ? String(el.value).split(/\s+/) : [])
+        : [];
       setCurrentTokens(arr);
     };
     update();
@@ -152,17 +157,37 @@ export default function TagPickerButton({ anchorRef, opRef, onInsert, currentTyp
     keywords: keywords || [],
   }), [flavors, types, keywords]);
 
-  const selectedSet = useMemo(() => new Set(currentTokens), [currentTokens]);
+  // ✅ “태그만” 선택 집계
+  const nameSetByTab = useMemo(() => ({
+    flavors: new Set((flavors || []).map(x => x.name)),
+    types:   new Set((types   || []).map(x => x.name)),
+    keywords:new Set((keywords|| []).map(x => x.name)),
+  }), [flavors, types, keywords]);
+
+  const selectedTagSet = useMemo(() => {
+    const s = new Set();
+    const F = nameSetByTab.flavors, T = nameSetByTab.types, K = nameSetByTab.keywords;
+    for (const tok of currentTokens) if (F.has(tok) || T.has(tok) || K.has(tok)) s.add(tok);
+    return s;
+  }, [currentTokens, nameSetByTab]);
 
   // ===== URL 갱신 유틸 =====
   const replaceSearchWithCurrentQ = () => {
     if (!pathname?.startsWith?.("/search")) return;
     const el = anchorRef?.current; if (!el) return;
-    const qVal = (el.value || "").trim();
-    const params = new URLSearchParams(searchParams?.toString());
+    const qVal = (el.value || "").toString();
+    // 훅은 한 틱 늦을 수 있으니 최신 URL을 직접 사용
+    const raw = typeof window !== "undefined" ? window.location.search : (searchParams?.toString() || "");
+    const params = new URLSearchParams(raw);
     params.set("q", qVal);
     params.set("page", "1");
-    params.set("op", normalizeOp(op)); // state op만 신뢰
+    // op 우선순위: URL > opRef > state
+    const opFromURL = (params.get("op") || "").toLowerCase();
+    const opFromRef  = (opRef?.current?.value || "").toLowerCase();
+    const chosen = (opFromURL === "or" || opFromURL === "and")
+      ? opFromURL
+      : (opFromRef === "or" || opFromRef === "and" ? opFromRef : normalizeOp(op));
+    params.set("op", chosen);
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
@@ -170,7 +195,7 @@ export default function TagPickerButton({ anchorRef, opRef, onInsert, currentTyp
     const tok = (name || "").trim(); if (!tok) return;
     if (typeof onInsert === "function") { onInsert(tok); return; }
     const el = anchorRef?.current; if (!el) return;
-    let tokens = el.value.trim() ? el.value.trim().split(/\s+/) : [];
+    let tokens = el.value && String(el.value).trim() ? String(el.value).trim().split(/\s+/) : [];
     tokens = tokens.includes(tok) ? tokens.filter((t) => t !== tok) : [...tokens, tok];
     el.value = tokens.join(" ");
     el.dispatchEvent(new Event("input", { bubbles: true }));
@@ -179,8 +204,9 @@ export default function TagPickerButton({ anchorRef, opRef, onInsert, currentTyp
 
   const clearSelectedChips = () => {
     const el = anchorRef?.current; if (!el) return;
-    const tokens = el.value.trim() ? el.value.trim().split(/\s+/) : [];
-    const next = tokens.filter((t) => !(flavors?.some(f=>f.name===t) || types?.some(x=>x.name===t) || keywords?.some(k=>k.name===t)));
+    const tokens = el.value && String(el.value).trim() ? String(el.value).trim().split(/\s+/) : [];
+    const F = nameSetByTab.flavors, T = nameSetByTab.types, K = nameSetByTab.keywords;
+    const next = tokens.filter((t) => !(F.has(t) || T.has(t) || K.has(t)));
     if (next.length === tokens.length) return;
     el.value = next.join(" ");
     el.dispatchEvent(new Event("input", { bubbles: true }));
@@ -198,17 +224,16 @@ export default function TagPickerButton({ anchorRef, opRef, onInsert, currentTyp
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
-  // ===== 필터링된 목록(선택 먼저) =====
+  // 필터링(선택 먼저)
   const baseList = catalogByTab[tab];
   const q = norm(filter);
   const filtered = useMemo(() => (q ? baseList.filter((x) => norm(x.name).includes(q)) : baseList), [baseList, q]);
   const [selList, restList] = useMemo(() => {
     const sel = [], rest = [];
-    for (const x of filtered) (selectedSet.has(x.name) ? sel : rest).push(x);
+    for (const x of filtered) (selectedTagSet.has(x.name) ? sel : rest).push(x);
     return [sel, rest];
-  }, [filtered, selectedSet]);
+  }, [filtered, selectedTagSet]);
 
-  // ===== 렌더 =====
   return (
     <div className="tagpick" ref={rootRef}>
       <button type="button" className="tp-btn" aria-expanded={open} onClick={() => setOpen(v=>!v)} title="태그 추가">
@@ -216,17 +241,17 @@ export default function TagPickerButton({ anchorRef, opRef, onInsert, currentTyp
       </button>
 
       {open && (
-        <div className="tp-pop" role="dialog" aria-label="태그 선택"> 직접 변경(토
+        <div className="tp-pop" role="dialog" aria-label="태그 선택">
           <div className="tp-actions">
             <div className="tp-actions-left">
-              <span className="tp-count">선택 {currentTokens.length}</span>
+              <span className="tp-count">선택 {selectedTagSet.size}</span>
 
               <div className="tp-op" role="group" aria-label="검색 결합 방식">
                 <button type="button" className={`tp-op-btn ${op === "and" ? "on" : ""}`} aria-pressed={op === "and"} onClick={() => setOpAndSync("and")}>그리고</button>
                 <button type="button" className={`tp-op-btn ${op === "or" ? "on" : ""}`}  aria-pressed={op === "or"}  onClick={() => setOpAndSync("or")}>또는</button>
               </div>
 
-              <button type="button" className="tp-clear" disabled={!currentTokens.length} onClick={clearSelectedChips}>모두 지우기</button>
+              <button type="button" className="tp-clear" disabled={!selectedTagSet.size} onClick={clearSelectedChips}>모두 지우기</button>
             </div>
 
             <div className="tp-actions-right">
@@ -242,7 +267,6 @@ export default function TagPickerButton({ anchorRef, opRef, onInsert, currentTyp
 
           <div className="tp-filter"><input placeholder="필터 검색" value={filter} onChange={(e) => setFilter(e.target.value)} /></div>
 
-          {/* 선택 목록(있으면 상단에 고정) */}
           {!!selList.length && (
             <div className="tp-selected">
               {selList.map((x) => (
@@ -253,21 +277,18 @@ export default function TagPickerButton({ anchorRef, opRef, onInsert, currentTyp
             </div>
           )}
 
-          {/* 미선택 목록 */}
           <div className="tp-list">
             {restList.length ? restList.map((x) => {
-              const on = selectedSet.has(x.name);
+              const on = selectedTagSet.has(x.name);
               let disabled = false;
 
               if (tab === "flavors") {
-                // AND 모드에서는 현재 선택 상태에서 추가 선택 시 가능한 항목만 활성
                 if (op === "and" && !loadingFlavors) {
                   const c = countsFlavors?.[x.id] ?? 0;
                   disabled = c === 0;
                 }
               } else if (tab === "types") {
                 if (op === "and" && !loadingTypes) {
-                  // 이미 타입을 선택했다면 동일 타입만 허용
                   if (selectedTypeIds.length > 0) {
                     disabled = !selectedTypeIds.includes(x.id);
                   } else {
@@ -276,7 +297,6 @@ export default function TagPickerButton({ anchorRef, opRef, onInsert, currentTyp
                   }
                 }
               } else {
-                // keywords 탭: 현재는 항상 활성
                 disabled = false;
               }
 
