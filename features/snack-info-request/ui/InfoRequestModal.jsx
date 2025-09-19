@@ -127,8 +127,30 @@ export default function InfoRequestModal({
       if (error) throw error;
       setDone(true);
     } catch (e) {
-      console.error(e);
-      alert("요청을 저장하지 못했습니다. 잠시 후 다시 시도해주세요.");
+      // Supabase/Postgres 에러 → 사용자 안내문으로 변환
+      const err = e?.error ?? e ?? {};
+      const code = err?.code ?? err?.cause?.code ?? null;
+      const msg  = String(err?.message || err?.details || err?.hint || "");
+
+      let notice = "요청을 저장하지 못했습니다. 잠시 후 다시 시도해주세요.";
+
+      // 1) 동일 과자 중복(부분 고유 인덱스) → 23505 (unique_violation)
+      if (code === "23505" || /unique|already exists|duplicate/i.test(msg)) {
+        notice = "이미 같은 과자에 ‘대기 중’ 요청이 있어요. 기존 요청이 처리된 뒤 다시 시도해주세요.";
+      }
+      // 2) 전역 보류 상한(트리거) → P0001 (raise exception)
+      else if (code === "P0001" || /보류.*초과|pending.*cap/i.test(msg)) {
+        notice = "보류 중인 요청 상한(3건)을 초과했어요. 기존 요청이 처리된 뒤 다시 시도해주세요.";
+      }
+
+      // 개발환경에서만 자세한 로그
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("[InfoRequestModal] submit failed:", {
+          code: err?.code, message: err?.message, details: err?.details, hint: err?.hint
+        });
+      }
+      alert(notice);
+      return;
     } finally {
       setBusy(false);
     }
