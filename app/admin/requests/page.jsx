@@ -233,7 +233,7 @@ export default function RequestsBySnackPage() {
             checked={dupOnly}
             onChange={(e) => setDupOnly(e.target.checked)}
           />
-          완전 중복만 보기
+          일치 요청만 보기
         </label>
         <input
           className="searchInput"

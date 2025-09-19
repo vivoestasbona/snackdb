@@ -15,16 +15,13 @@ export default function SearchPage() {
   const op = ((sp.get("op") ?? "and").toLowerCase() === "or") ? "or" : "and";
   const rawSort = (sp.get("sort") ?? "relevance").toLowerCase();
   const order = (sp.get("order") ?? "desc").toLowerCase() === "asc" ? "asc" : "desc";
-  const sort = ["relevance","likes","avg","tasty","value","plenty","clean","addictive","comments"].includes(rawSort)
-    ? rawSort : "relevance";
+  const sort = ["relevance","likes","avg","tasty","value","plenty","clean","addictive","comments"].includes(rawSort) ? rawSort : "relevance";
 
-  console.log("[DBG] /search params", { op, term, page, sort, order });
-
-  const { loading, items, total, avgMap, likesMap, likedSet } = useSearchSnacks({
+  const { loading, items, totalPages, avgMap, likesMap, likedSet } = useSearchSnacks({
     term, page, pageSize: PAGE_SIZE, operator: op, sort, order
   });
 
-  const totalPages = Math.max(1, Math.ceil((total || 0) / PAGE_SIZE));
+  const tp = Math.max(1, Number(totalPages || 1));
 
   return (
     <section className={styles.search}>
@@ -34,7 +31,7 @@ export default function SearchPage() {
         <SearchResults
           term={term}
           page={page}
-          totalPages={totalPages}
+          totalPages={tp}
           items={items}
           avgMap={avgMap}
           likesMap={likesMap}

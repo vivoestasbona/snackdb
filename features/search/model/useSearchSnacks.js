@@ -6,7 +6,7 @@ import { searchSnacks, loadSnackMetrics } from "@entities/snack/model/searchSnac
 export function useSearchSnacks({
   term = "",
   page = 1,
-  pageSize = 20,
+  pageSize = 24,
   operator = "and",
   sort = "relevance",        // relevance|likes|avg|facet|comments|views
   order = "desc"
@@ -99,8 +99,25 @@ export function useSearchSnacks({
     (async () => {
       setState((s) => ({ ...s, loading: true }));
       try {
-        // 🔹 operator 전달
-        const { items, page: p, totalPages, pageIds } = await searchSnacks({ term, page, pageSize, operator });
+        // 🔹 operator + sort/order 함께 전달 (서버가 지원하지 않으면 무시되어도 무방)
+        const res = await searchSnacks({ term, page, pageSize, operator, sort, order });
+
+        // 결과 안전 분해
+        const items = res?.items ?? [];
+        const p = Number(res?.page ?? page ?? 1) || 1;
+        const pageIds = (res?.pageIds ?? items.map(it => it?.id)).filter(Boolean);
+
+        // 🔹 totalPages 방어 로직 (여러 키 허용 + 강건한 fallback)
+        const totalPagesRaw =
+          res?.totalPages ??
+          res?.total_pages ??
+          (typeof res?.total === "number" ? Math.ceil(res.total / pageSize) : undefined) ??
+          (typeof res?.count === "number" ? Math.ceil(res.count / pageSize) : undefined);
+        let totalPages = Number(totalPagesRaw);
+        if (!totalPages || !Number.isFinite(totalPages)) {
+          // API가 총 개수를 안 주는 경우: 현재 페이지가 꽉 차면 최소 2p 가시성 보장
+          totalPages = items.length >= pageSize ? Math.max(2, p + 1) : Math.max(1, p);
+        }
 
         let avgMap = {}, likesMap = {}, likedSet = new Set(), detailMap = {}, commentsMap = {};
         if (pageIds?.length) {
@@ -111,10 +128,16 @@ export function useSearchSnacks({
         }
         const sortedItems = cmpBy(items, { avgMap, likesMap, detailMap, commentsMap });
         if (!alive) return;
-        setState({ loading: false, items: sortedItems, page: p, totalPages, avgMap, likesMap, likedSet });
+        setState({
+          loading: false,
+          items: sortedItems,
+          page: p,
+          totalPages,
+          avgMap, likesMap, likedSet
+        });
       } catch (e) {
         if (!alive) return;
-        setState((s) => ({ ...s, loading: false, items: [], totalPages: 1 }));
+        setState((s) => ({ ...s, loading: false, items: [], page: 1, totalPages: 1 }));
         console.error(e);
       }
     })();

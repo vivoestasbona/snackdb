@@ -13,10 +13,9 @@ export default function Navbar() {
   const router = useRouter();
   const sp = useSearchParams();
 
-  // 검색 입력 레퍼런스(오프스크린 텍스트 인풋: TagPicker가 focus/setSelectionRange 가능)
-  const searchRef = useRef(null);
-  const chipInputRef = useRef(null);
-  const opRef = useRef(null);
+  const searchRef = useRef(null);     // 오프스크린 입력(q)
+  const chipInputRef = useRef(null);  // 눈에 보이는 미니 입력
+  const opRef = useRef(null);         // and/or 히든
 
   // 로그인 상태
   const [open, setOpen] = useState(false);
@@ -62,11 +61,7 @@ export default function Navbar() {
         const user = session?.user ?? null;
         setEmail(user?.email ?? null);
 
-        if (!user) {
-          setRole(null);
-          setDisplayName(null);
-          return;
-        }
+        if (!user) { setRole(null); setDisplayName(null); return; }
 
         client
           .from("profiles")
@@ -78,35 +73,22 @@ export default function Navbar() {
             setDisplayName(error ? null : data?.display_name ?? null);
           });
 
-        // 로그인 성공 시 모달 닫기 + 사유 초기화 + 간단 비콘
         setOpen(false);
         setLoginReason(null);
         try {
           const from = localStorage.getItem("lp_last_from") || null;
           localStorage.removeItem("lp_last_from");
           if (from) {
-            const payload = JSON.stringify({
-              event: "login_success",
-              from,
-              path: window.location?.pathname || null,
-            });
+            const payload = JSON.stringify({ event: "login_success", from, path: window.location?.pathname || null });
             if (navigator.sendBeacon) {
               navigator.sendBeacon("/api/metrics/login-prompt", new Blob([payload], { type: "application/json" }));
             } else {
-              fetch("/api/metrics/login-prompt", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: payload,
-              });
+              fetch("/api/metrics/login-prompt", { method: "POST", headers: { "Content-Type": "application/json" }, body: payload });
             }
           }
         } catch {}
       }
-      if (event === "SIGNED_OUT") {
-        setEmail(null);
-        setRole(null);
-        setDisplayName(null);
-      }
+      if (event === "SIGNED_OUT") { setEmail(null); setRole(null); setDisplayName(null); }
     });
 
     return () => {
@@ -115,30 +97,16 @@ export default function Navbar() {
     };
   }, []);
 
-  useEffect(() => {
-    const sp = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
-    const fromURL = sp?.get("op");
-    const saved = (typeof window !== "undefined" ? localStorage.getItem("search_op") : null);
-    const val = ((fromURL || saved || "and").toLowerCase() === "or") ? "or" : "and";
-    if (opRef.current) opRef.current.value = val;
-  }, []);
-
-  const handleLogout = async () => {
-    const client = getSupabaseClient();
-    await client.auth.signOut();
-  };
+  const handleLogout = async () => { const client = getSupabaseClient(); await client.auth.signOut(); };
   const nameToShow = displayName || email || "";
 
-  // ---------- 태그 마스터 로딩(표시용 구분: TAG 배지/색상) ----------
-  const [flavors, setFlavors] = useState([]);
-  const [types, setTypes] = useState([]);
-  const [keywords, setKeywords] = useState([]);
+  // 태그 마스터(표시색 구분용)
+  const [flavors, setFlavors] = useState([]), [types, setTypes] = useState([]), [keywords, setKeywords] = useState([]);
   useEffect(() => {
     (async () => {
       try {
         const [f, t] = await Promise.all([getSnackFlavors(), getSnackTypes()]);
-        setFlavors(f || []);
-        setTypes(t || []);
+        setFlavors(f || []); setTypes(t || []);
         const supa = getSupabaseClient();
         const { data: ks } = await supa.from("snack_keywords").select("id,name").eq("is_active", true);
         setKeywords(ks || []);
@@ -148,68 +116,39 @@ export default function Navbar() {
   const flavorSet = useMemo(() => new Set((flavors || []).map((v) => v.name)), [flavors]);
   const typeSet = useMemo(() => new Set((types || []).map((v) => v.name)), [types]);
   const keywordSet = useMemo(() => new Set((keywords || []).map((v) => v.name)), [keywords]);
-  const chipClass = (tok) => {
-    if (flavorSet.has(tok)) return "chip--flavor";
-    if (typeSet.has(tok)) return "chip--type";
-    if (keywordSet.has(tok)) return "chip--keyword";
-    return "chip--text";
-  };
+  const chipClass = (tok) => (flavorSet.has(tok) ? "chip--flavor" : typeSet.has(tok) ? "chip--type" : keywordSet.has(tok) ? "chip--keyword" : "chip--text");
 
-  // ---------- 칩 입력 상태 ----------
-  const [tokens, setTokens] = useState([]); // 칩으로 표시되는 토큰들
-  const [typing, setTyping] = useState(""); // 칩 입력칸 현재 텍스트
+  // 칩 입력 상태
+  const [tokens, setTokens] = useState([]);
+  const [typing, setTyping] = useState("");
+  const [showAll, setShowAll] = useState(false);
 
-  const [showAll, setShowAll] = useState(false); // 요약 칩 클릭 시 전체 토큰 팝오버
-  const moreRef = useRef(null);
-  const popRef = useRef(null)
-
-  // hidden q <-> tokens 동기화
   const syncHiddenFromTokens = (next) => {
-    const qEl = searchRef.current;
-    if (!qEl) return;
+    const qEl = searchRef.current; if (!qEl) return;
     qEl.value = next.join(" ");
-    qEl.dispatchEvent(new Event("input", { bubbles: true })); // TagPicker가 input 이벤트를 구독
+    qEl.dispatchEvent(new Event("input", { bubbles: true }));
   };
-  const setTokensSafe = (next) => {
-    setTokens(next);
-    syncHiddenFromTokens(next);
-  };
+  const setTokensSafe = (next) => { setTokens(next); syncHiddenFromTokens(next); };
   const addToken = (tok) => {
-    const t = (tok || "").trim();
-    if (!t) return;
-    if (tokens.includes(t)) return;
-    setTokensSafe([...tokens, t]);
-    setTyping("");
-    chipInputRef.current?.focus();
+    const t = (tok || "").trim(); if (!t || tokens.includes(t)) return;
+    setTokensSafe([...tokens, t]); setTyping(""); chipInputRef.current?.focus();
   };
-  const removeTokenAt = (idx) => {
-    const next = tokens.slice();
-    next.splice(idx, 1);
-    setTokensSafe(next);
-    chipInputRef.current?.focus();
-  };
+  const removeTokenAt = (idx) => { const next = tokens.slice(); next.splice(idx, 1); setTokensSafe(next); chipInputRef.current?.focus(); };
 
   // URL(q/op) → 칩/히든 초기화
   useEffect(() => {
     const q = sp.get("q") || "";
     const op = (sp.get("op") || "and").toLowerCase() === "or" ? "or" : "and";
     const parts = q.trim() ? q.trim().split(/\s+/) : [];
-    setTokens(parts);
-    syncHiddenFromTokens(parts);
+    setTokens(parts); syncHiddenFromTokens(parts);
     if (opRef.current && opRef.current.value !== op) opRef.current.value = op;
-    console.log("[DBG] Navbar.useEffect(sp)", { url_op: op, opRef: opRef.current?.value, q });
-    setTyping("");
-    setShowAll(false);
+    setTyping(""); setShowAll(false);
   }, [sp]);
 
-  // TagPicker가 hidden q를 직접 변경(토글)할 때 → 칩도 동기화
+  // hidden q가 변하면 칩도 동기화
   useEffect(() => {
-    const qEl = searchRef.current;
-    if (!qEl) return;
-    const onInput = () => {
-      const v = qEl.value || "";
-      setTokens(v.trim() ? v.trim().split(/\s+/) : []);
-    };
+    const qEl = searchRef.current; if (!qEl) return;
+    const onInput = () => { const v = qEl.value || ""; setTokens(v.trim() ? v.trim().split(/\s+/) : []); };
     qEl.addEventListener("input", onInput);
     return () => qEl.removeEventListener("input", onInput);
   }, []);
@@ -221,118 +160,54 @@ export default function Navbar() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  useEffect(() => {
-    const sp = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
-    const fromURL = sp?.get("op");
-    const saved = (typeof window !== "undefined" ? localStorage.getItem("search_op") : null);
-    const val = ((fromURL || saved || "and").toLowerCase() === "or") ? "or" : "and";
-    if (opRef.current) opRef.current.value = val;
-  }, []);
-
-  // ✅ 제출 로직을 함수로 분리(폼 onSubmit, 버튼 onClick 양쪽에서 사용)
-  function handleSearchSubmit(e) {
-    e?.preventDefault?.();
-
-    // 제출 직전 타이핑 텍스트를 토큰으로 편입
-    const tail = (typing || "").trim();
+  function handleSubmit(e) {
+    e.preventDefault();
+    const tail = typing.trim();
     const finalTokens = tail ? [...tokens, tail] : tokens;
     const qStr = finalTokens.join(" ");
     if (searchRef.current) searchRef.current.value = qStr;
-    const v = qStr;
 
-    // ✅ 우선순위: URL → hidden input(opRef) → localStorage
-    const byURL =
-      typeof window !== "undefined"
-        ? new URLSearchParams(window.location.search).get("op")
-        : null;
-
-    const byRef =
-      opRef.current?.value ??
-      (e?.currentTarget?.elements?.namedItem?.("op")?.value ?? undefined);
-
-    const bySaved =
-      typeof window !== "undefined"
-        ? localStorage.getItem("search_op")
-        : null;
-
-    const op =
-      ((byURL ?? byRef ?? bySaved ?? "and").toLowerCase() === "or")
-        ? "or"
-        : "and";
-
-    console.log("[DBG] Navbar.submit", { byRef, byURL, bySaved, final: op, q: v });
-
-    const base = v ? `/search?q=${encodeURIComponent(v)}&page=1` : `/search?page=1`;
+    const byRef = e.currentTarget.op?.value;
+    const byURL = sp.get("op");
+    const bySaved = opRef.current?.value;
+    const op = ((byURL ?? byRef ?? bySaved ?? "and").toLowerCase() === "or") ? "or" : "and";
+    const base = qStr ? `/search?q=${encodeURIComponent(qStr)}&page=1` : `/search?page=1`;
     router.push(`${base}&op=${op}`);
-    setTyping("");
+    setTyping(""); setShowAll(false);
   }
 
   return (
     <>
       <header className="nav">
         <div className="inner">
-          <div className="logo">
-            <Link href="/">SnackDB</Link>
-          </div>
+          <div className="logo"><Link href="/">SnackDB</Link></div>
 
-          <form
-            className="navSearch"
-            onSubmit={(e) => handleSearchSubmit(e)}
-          >
+          <form className="navSearch" onSubmit={handleSubmit}>
             <div className="navSearchBox">
-              {/* 오프스크린 텍스트 인풋: TagPicker가 focus/입력 이벤트를 정상 사용 */}
-              <input
-                name="q"
-                type="text"
-                ref={searchRef}
-                autoComplete="off"
-                aria-hidden="true"
-                className="srOnlyInput"
-              />
+              <input name="q" type="text" ref={searchRef} autoComplete="off" aria-hidden="true" className="srOnlyInput" />
 
-              {/* 칩 컨테이너 + 미니 입력칸 */}
-              <div
-                className="chipBox"
-                onMouseDown={(e) => {
-                  if (e.target === e.currentTarget) chipInputRef.current?.focus();
-                }}
-              >
+              <div className="chipBox" onMouseDown={(e) => { if (e.target === e.currentTarget) chipInputRef.current?.focus(); }}>
                 {(() => {
-                  const MAX = 1; // 1개만 표시
+                  const MAX = 1;
                   const total = tokens.length;
                   const visible = tokens.slice(0, MAX);
                   return (
                     <>
                       {visible.map((t, i) => {
-                        const idx = i;
-                        const cls = chipClass(t);
+                        const idx = i, cls = chipClass(t);
                         return (
                           <span
                             className={`chip ${cls} clickable`}
                             key={`${t}-${idx}`}
                             title="검색 토큰"
-                            onClick={() => setShowAll((v) => !v)}   // 칩 전체 클릭으로 팝오버 토글
+                            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setShowAll(true); }}
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowAll(true); }}
                           >
                             <span className="chipText">
                               {t}
-                              {total > MAX && (
-                                <span
-                                  className="chipMoreIn"
-                                  title={`${total - MAX}개 더 있음`}
-                                  aria-hidden="true"
-                                >
-                                  &nbsp;… +{total - MAX}
-                                </span>
-                              )}
+                              {total > MAX && (<span className="chipMoreIn" title={`${total - MAX}개 더 있음`} aria-hidden="true">&nbsp;… +{total - MAX}</span>)}
                             </span>
-                            <button
-                              type="button"
-                              className="chipX"
-                              aria-label={`${t} 삭제`}
-                              onClick={(e) => { e.stopPropagation(); removeTokenAt(idx); }}
-                            >
-                              ×
-                            </button>
+                            <button type="button" className="chipX" aria-label={`${t} 삭제`} onClick={(e) => { e.stopPropagation(); e.preventDefault(); removeTokenAt(idx); }}>×</button>
                           </span>
                         );
                       })}
@@ -350,43 +225,53 @@ export default function Navbar() {
                   value={typing}
                   onChange={(e) => setTyping(e.target.value)}
                   onKeyDown={(e) => {
-                    // Enter/Space/Comma → 토큰 확정
                     if (["Enter", " ", ","].includes(e.key)) {
-                      const cand = (typing || "").trim();
-                      if (cand) addToken(cand);
-                      e.preventDefault();
-                      return;
+                      const cand = typing.trim(); if (cand) addToken(cand);
+                      e.preventDefault(); return;
                     }
-                    // 백스페이스: 비어 있을 때 마지막 칩 삭제
                     if (e.key === "Backspace" && typing === "" && tokens.length) {
-                      const idx = tokens.length - 1;
-                      const next = tokens.slice(0, idx);
-                      setTokensSafe(next);
-                      e.preventDefault();
+                      const idx = tokens.length - 1; const next = tokens.slice(0, idx);
+                      setTokensSafe(next); e.preventDefault();
                     }
                   }}
                   onPaste={(e) => {
-                    const text = (e.clipboardData?.getData("text") || "").trim();
-                    if (!text) return;
-                    const parts = text.split(/\s+/).filter(Boolean);
-                    if (!parts.length) return;
-                    e.preventDefault();
-                    const uniq = [...new Set([...tokens, ...parts])];
-                    setTokensSafe(uniq);
+                    const text = (e.clipboardData?.getData("text") || "").trim(); if (!text) return;
+                    const parts = text.split(/\s+/).filter(Boolean); if (!parts.length) return;
+                    e.preventDefault(); const uniq = [...new Set([...tokens, ...parts])]; setTokensSafe(uniq);
                   }}
                 />
               </div>
 
-              {/* 태그 버튼 */}
-              <TagPickerButton anchorRef={searchRef} opRef={opRef} />
+              {/* 토큰 전체 팝오버 */}
+              {showAll && (
+                <>
+                  <div className="popMask" onClick={() => setShowAll(false)} />
+                  <div className="tokenPopover" role="dialog" aria-label="전체 검색어">
+                    <div className="tokenHead">
+                      <span>전체 검색어 <span className="count">{tokens.length}</span></span>
+                      <button type="button" className="popClose" aria-label="닫기" onClick={() => setShowAll(false)}>×</button>
+                    </div>
+                    <div className="tokenList">
+                      {tokens.map((t, i) => (
+                        <span
+                          key={`${t}-${i}`}
+                          className={`chip ${chipClass(t)} clickable`}
+                          title="클릭하면 삭제"
+                          onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); removeTokenAt(i); }}
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeTokenAt(i); }}
+                        >
+                          <span className="chipText">{t}</span>
+                          <button type="button" className="chipX" aria-label={`${t} 삭제`} onClick={(e) => { e.stopPropagation(); e.preventDefault(); removeTokenAt(i); }}>×</button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
 
-              {/* op hidden */}
               <input type="hidden" name="op" defaultValue="and" ref={opRef} />
-
-              {/* 검색 버튼: onClick도 handleSearchSubmit 연결 */}
-              <button type="submit" aria-label="검색" onClick={(e) => handleSearchSubmit(e)}>
-                <span aria-hidden>🔍</span>
-              </button>
+              <button type="submit" aria-label="검색" className="searchBtn"><span aria-hidden>🔍</span></button>
+              <TagPickerButton anchorRef={searchRef} opRef={opRef} />
             </div>
           </form>
 
@@ -409,73 +294,40 @@ export default function Navbar() {
 
       <style jsx>{`
         .nav {
-          position: sticky;
-          top: 0;
-          background: #ffffffcc;
-          backdrop-filter: blur(6px);
-          border-bottom: 1px solid #eee;
-          z-index: 1000;
+          position: sticky; top: 0;
+          background: #ffffffcc; backdrop-filter: blur(6px);
+          border-bottom: 1px solid #eee; z-index: 1000;
         }
         .inner {
           max-width: var(--container-max);
-          margin: 0 auto;
-          padding: 10px 16px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          height: 56px;
+          margin: 0 auto; padding: 10px 16px;
+          display: flex; align-items: center; justify-content: space-between; height: 56px;
         }
-        .logo :global(a) {
-          font-weight: 700;
-          color: inherit;
-          text-decoration: none;
-        }
+        .logo :global(a) { font-weight: 700; color: inherit; text-decoration: none; }
 
         :global(:root) { --nav-search-color: #000; --nav-search-size:44px; }
-        .navSearch { display:flex; align-items:center; }
+        .navSearch { display:flex; align-items:center; z-index: 2; }
 
         .navSearchBox{
-          display:inline-flex;
-          align-items:stretch;
+          display:inline-flex; align-items:stretch;
           height: var(--nav-search-size);
           border: 3px solid var(--nav-search-color);
-          overflow: visible;
-          background:#fff;
-          position: relative; /* 팝오버 앵커 */
+          overflow: visible; background:#fff; position: relative;
         }
+        .navSearchBox > :is(input,button){ border: 0 !important; border-radius: 0 !important; margin: 0 !important; outline: none; }
 
-        .navSearchBox > :is(input,button){
-          border: 0 !important;
-          border-radius: 0 !important;
-          margin: 0 !important;
-          outline: none;
-        }
-
-        /* 칩 박스(칩 + 미니 인풋) */
-        .chipBox{
-          display:flex; align-items:center; flex-wrap:wrap;
-          gap:6px;
-          padding: 6px 10px;
-          width: min(38vw, 320px);
-        }
+        .chipBox{ display:flex; align-items:center; flex-wrap:wrap; gap:6px; padding: 6px 10px; width: min(38vw, 320px); }
         .chip{
           display:inline-flex; align-items:center; gap:6px;
-          padding: 4px 8px; border-radius:999px;
-          font-size:12px; line-height:1;
+          padding: 4px 8px; border-radius:999px; font-size:12px; line-height:1;
           background:#f6f8fb; border:1px solid #e5e7eb; color:#111;
         }
         .chip.clickable{ cursor: pointer; }
         .chip.clickable:hover{ filter: brightness(0.98); }
         .chipText{ max-width: 160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .chipX{
-          border:0; background:transparent; cursor:pointer;
-          font-size:14px; line-height:1; color:#444; padding:0; margin:0;
-        }
+        .chipX{ border:0; background:transparent; cursor:pointer; font-size:14px; line-height:1; color:#444; padding:0; margin:0; }
         .chipX:hover{ color:#000; }
-        .chipInput{
-          min-width: 80px; flex: 1 1 80px;
-          border:0; outline:0; font: inherit; color:#111; background:#fff;
-        }
+        .chipInput{ min-width: 80px; flex: 1 1 80px; border:0; outline:0; font: inherit; color:#111; background:#fff; }
         .chipInput::placeholder{ color:#999; }
         .chipInput:focus{ box-shadow: 0 0 0 2px rgba(0,0,0,.06) inset; }
 
@@ -484,119 +336,67 @@ export default function Navbar() {
         .chip--keyword{ background:#eaf7ea; color:#1b5e20; border-color:#d5f0d5; }
         .chip--text{    background:#f6f8fb; color:#111;    border-color:#e5e7eb; }
 
-        /* 칩 내부 요약 버튼 */
-        .chipMoreIn{
-          opacity: .8;
-          font: inherit;
-        }
+        .chipMoreIn{ opacity: .8; font: inherit; }
 
-        /* ▼ 팝오버 */
-        .popMask{
-          position: fixed; inset: 0;
-          background: transparent;
-          z-index: 4;
-        }
+        /* 팝오버 */
+        .popMask{ position: fixed; inset: 0; background: transparent; z-index: 4; }
         .tokenPopover{
-          position: absolute;
-          top: calc(100% + 8px);
-          left: 0;
-          min-width: 280px;
-          max-width: 520px;
-          max-height: 320px;
-          overflow: auto;
-          background: #fff;
-          border: 1px solid #e5e7eb;
-          border-radius: 10px;
-          box-shadow: 0 8px 24px rgba(0,0,0,.12);
-          padding: 10px;
-          z-index: 5;
+          position: absolute; top: calc(100% + 8px); left: 0;
+          min-width: 280px; max-width: 520px; max-height: 320px; overflow: auto;
+          background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+          box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 10px; z-index: 5;
         }
-        .tokenHead{
-          display:flex; align-items:center; justify-content:space-between;
-          font-size:12px; color:#333; margin-bottom:6px;
-        }
+        .tokenHead{ display:flex; align-items:center; justify-content:space-between; font-size:12px; color:#333; margin-bottom:6px; }
         .tokenHead .count{ font-weight:600; margin-left:4px; }
-        .popClose{
-          border:0; background:transparent; cursor:pointer;
-          font-size:18px; line-height:1; color:#555;
-        }
+        .popClose{ border:0; background:transparent; cursor:pointer; font-size:18px; line-height:1; color:#555; }
         .popClose:hover{ color:#000; }
-        .tokenList{
-          display:flex; flex-wrap:wrap; gap:6px;
-        }
+        .tokenList{ display:flex; flex-wrap:wrap; gap:6px; }
 
-        /* 우측 제출 버튼 */
-        .navSearchBox > button{
-          width: var(--nav-search-size);
-          padding: 0;
-          border: 0 !important;
-          background: var(--nav-search-color) !important;
-          color:#fff !important;
+        /* 오프스크린 입력 */
+        .srOnlyInput{ position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+        /* 검색 버튼 */
+        .searchBtn{
+          flex: 0 0 var(--nav-search-size);
+          width: var(--nav-search-size); min-width: var(--nav-search-size);
+          height: 100%; align-self: stretch;
           display:flex; align-items:center; justify-content:center;
-          cursor:pointer;
+          background: var(--nav-search-color) !important; color:#fff !important;
+          border: 0 !important; padding: 0 !important; margin: 0 !important;
+          outline: none; cursor:pointer; -webkit-appearance: none; appearance: none; box-sizing: border-box;
         }
-        .navSearch button:active{ transform: translateY(0.5px); }
+        .searchBtn > span{ font-size:18px; line-height:1; display:inline-block; }
+        .searchBtn:hover{ filter: brightness(0.96); }
+        .searchBtn:active{ transform: translateY(0.5px); }
+        .searchBtn:focus-visible{ outline:2px solid #000; outline-offset:2px; border-radius:4px; }
 
+        /* 우측 네비(링크/버튼을 링크처럼 보이게) */
         .navLinks{
-          display: inline-flex;
-          align-items: center;
-          gap: 18px;
-          white-space: nowrap;
-          z-index: 1;
+          position: relative; z-index: 3;
+          display: inline-flex; align-items: center; gap: 18px; white-space: nowrap;
         }
         .navLinks :global(a),
         .navLinks button{
-          appearance: none;
-          -webkit-appearance: none;
-          background: transparent !important;
-          border: 0 !important;
-          padding: 0 !important;
-          margin: 0 !important;
-          border-radius: 0 !important;
-          font: inherit;
-          line-height: 1;
-          color: #111 !important;
-          text-decoration: none !important;
-          cursor: pointer;
+          appearance: none; -webkit-appearance: none;
+          background: transparent !important; border: 0 !important;
+          padding: 0 !important; margin: 0 !important; border-radius: 0 !important;
+          font: inherit; line-height: 1; color: #111 !important;
+          text-decoration: none !important; cursor: pointer;
         }
-        .navLinks :global(a):active,
-        .navLinks button:active{ opacity:.85; }
-        .navLinks :global(a):focus-visible,
-        .navLinks button:focus-visible{
-          outline:2px solid #000;
-          outline-offset:2px;
-          border-radius:4px;
-        }
-
-        /* TagPicker용 오프스크린 입력 */
-        .srOnlyInput{
-          position: absolute;
-          left: -9999px;
-          width: 1px; height: 1px;
-          opacity: 0; pointer-events: none;
+        .navLinks :global(a):visited{ color: #111 !important; }
+        .navLinks :global(a):active, .navLinks button:active{ opacity:.85; }
+        .navLinks :global(a):focus-visible, .navLinks button:focus-visible{
+          outline:2px solid #000; outline-offset:2px; border-radius:4px;
         }
 
         @media (min-width: 1024px){
           .inner { position: relative; }
-          .navSearch {
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            transform: translate(-48%, -50%);
-            z-index: 2;
-          }
-          .chipBox{
-            width: clamp(240px, 25vw, 420px);
-          }
-          .tokenPopover{
-            max-width: clamp(280px, 30vw, 520px);
-          }
-
+          .navSearch { position: absolute; left: 50%; top: 50%; transform: translate(-48%, -50%); z-index: 2; }
+          .chipBox{ width: clamp(240px, 25vw, 420px); }
+          .tokenPopover{ max-width: clamp(280px, 30vw, 520px); }
         }
         @media (max-width: 1023px){
-          .chipBox{
-            width: min(38vw, 320px);
-          }
+          .chipBox{ width: min(38vw, 320px); }
         }
       `}</style>
     </>
