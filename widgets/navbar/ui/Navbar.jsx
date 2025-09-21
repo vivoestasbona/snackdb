@@ -280,6 +280,7 @@ export default function Navbar() {
                 })()}
 
                 <input
+                  id="nav-search-visible"
                   ref={chipInputRef}
                   className="chipInput"
                   type="text"

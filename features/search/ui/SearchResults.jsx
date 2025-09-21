@@ -53,7 +53,7 @@ export default function SearchResults({
       <div className={styles.toolbarRight}>
         <label>
           정렬:&nbsp;
-          <select value={sort} onChange={onChangeSort}>
+          <select id="search-sort" aria-label="정렬 기준" value={sort} onChange={onChangeSort}>
             <option value="relevance">정확도순</option>
             <option value="likes">좋아요순</option>
             <option value="comments">한줄평 많은 순</option>

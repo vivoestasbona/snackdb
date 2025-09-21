@@ -43,10 +43,8 @@ export default function TagPickerButton({ anchorRef, opRef, onInsert, currentTyp
         ? fromURL
         : (typeof window !== "undefined" ? (localStorage.getItem("search_op") || "").toLowerCase() : "");
     if (next !== "and" && next !== "or") next = "and";
-    if (next !== op) {
-      setOp(next);
-      if (opRef?.current) opRef.current.value = next;
-    }
+    if (next !== op) setOp(next);
+    if (opRef?.current) opRef.current.value = next;
     if (typeof window !== "undefined") localStorage.setItem("search_op", next);
   }, [searchParams, opRef, op]);
 
@@ -265,7 +263,7 @@ export default function TagPickerButton({ anchorRef, opRef, onInsert, currentTyp
             <button type="button" className={tab === "keywords" ? "on" : ""} onClick={() => setTab("keywords")}>키워드</button>
           </div>
 
-          <div className="tp-filter"><input placeholder="필터 검색" value={filter} onChange={(e) => setFilter(e.target.value)} /></div>
+          <div className="tp-filter"><input id="tag-filter-input" placeholder="필터 검색" value={filter} onChange={(e) => setFilter(e.target.value)} /></div>
 
           {!!selList.length && (
             <div className="tp-selected">
