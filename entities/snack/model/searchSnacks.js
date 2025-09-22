@@ -34,7 +34,7 @@ export async function searchSnacks({
   if (tokens.length === 0) {
     const { data: rows, error, count: total } = await client
       .from("snacks")
-      .select("id,name,brand,slug,image_path,type:snack_types(id,name)", { count: "exact" })
+      .select("id,name,brand,slug,image_path,type:snack_types(id,name)", { count: "estimated" })
       .eq("is_public", true)
       .order("created_at", { ascending: false })
       .range((page - 1) * pageSize, page * pageSize - 1);
@@ -221,7 +221,9 @@ async function getSnackIdSetForToken(client, token) {
     .from("snacks")
     .select("id")
     .eq("is_public", true)
-    .or(`name.ilike.${like},brand.ilike.${like},slug.ilike.${like}`);
+    .or(`name_text.ilike.${like},brand_text.ilike.${like},slug.ilike.${like}`)
+    .limit(500);
+    
 
   const { data: typeRows } = await client
     .from("snack_types")
@@ -329,7 +331,8 @@ async function fallbackWholeStringIds(client, whole, maxIds = 1000) {
       .from("snacks")
       .select("id")
       .eq("is_public", true)
-      .or(`name.ilike.${like},brand.ilike.${like},slug.ilike.${like}`),
+      .or(`name.ilike.${like},brand.ilike.${like},slug.ilike.${like}`)
+      .limit(Math.max(50, Math.min(1000, maxIds * 2))),
     client.from("snack_types").select("id").eq("name", whole),
     client.from("snack_flavors").select("id").ilike("name", like),
     client.from("snack_keywords").select("id").eq("is_active", true).ilike("name", like),

@@ -56,7 +56,7 @@ export default function AdminPreview({ slug }) {
       const { data: snack } = await sb
         .from("snacks")
         .select("id, name, brand, image_path, slug, is_public, created_at, updated_at, type:snack_types(id, name)")
-        .eq("slug", decodeURIComponent(slug))
+        .eq("slug_ci", decodeURIComponent(slug).toLowerCase())
         .maybeSingle();
       if (!snack) { router.replace(`/`); return; }
 

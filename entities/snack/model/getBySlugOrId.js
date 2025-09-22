@@ -14,6 +14,8 @@ export async function getBySlugOrId(slugOrId, opts = {}) {
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
     .replace(/(^-+|-+$)/g, "");
+  const keyLC = key.toLowerCase();
+  const normalizedLC = normalized.toLowerCase();
 
   // 1) slug 매칭 (snack_types 조인)
   let { data: snack, error } = await sb
@@ -22,7 +24,7 @@ export async function getBySlugOrId(slugOrId, opts = {}) {
       id, name, brand, image_path, slug, type_id,
       type:snack_types ( id, name, slug )
     `)
-    .eq("slug", key)
+    .eq("slug_ci", normalizedLC)
     .eq("is_public", true)
     .maybeSingle();
   if (error) console.error("[snacks by slug] error:", error);
@@ -35,7 +37,7 @@ export async function getBySlugOrId(slugOrId, opts = {}) {
         id, name, brand, image_path, slug, type_id,
         type:snack_types ( id, name, slug )
       `)
-      .eq("slug", normalized)
+      .eq("slug_ci", normalizedLC)
       .eq("is_public", true)
       .maybeSingle();
     if (e2) console.error("[snacks by normalized slug] error:", e2);
