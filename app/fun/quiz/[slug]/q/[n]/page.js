@@ -2,6 +2,7 @@ import { redirect, notFound } from 'next/navigation';
 import QuizPlayShell from '../../../../../../widgets/quiz/QuizPlayShell.jsx';
 import { getQuizPublicBySlug } from '../../../../../../entities/quiz/model/getQuizPublicBySlug.js';
 import { getQuestionsPublic } from '../../../../../../entities/quiz/model/getQuestionsPublic.js';
+import AnswerFormText from '../../../../../../features/quiz-play/ui/AnswerFormText.jsx';
 
 function toPublicUrl(storagePath) {
   if (!storagePath) return '';
@@ -38,6 +39,15 @@ export default async function QuizQuestionPage({ params }) {
         question={q}
         currentIndex={idx}
         totalQuestions={totalQuestions}
+        answerForm={
+          <AnswerFormText
+            slug={slug}
+            quizId={meta.id}
+            questionId={current.id}
+            currentIndex={idx}
+            totalQuestions={totalQuestions}
+          />
+        }
       />
     </main>
   );
