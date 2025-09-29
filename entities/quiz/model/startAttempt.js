@@ -1,4 +1,5 @@
-﻿import supabaseAdmin from '../../../shared/api/supabaseAdmin.js';
+﻿import { getSupabaseAdmin } from '../../../shared/api/supabaseAdmin.js';
+const supabaseAdmin = getSupabaseAdmin();
 
 export async function startAttempt(quizId, userId = null) {
   if (!quizId) throw new Error('startAttempt: quizId is required');

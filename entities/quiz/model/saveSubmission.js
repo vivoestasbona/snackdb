@@ -1,4 +1,5 @@
-﻿import supabaseAdmin from '../../../shared/api/supabaseAdmin.js';
+﻿import { getSupabaseAdmin } from '../../../shared/api/supabaseAdmin.js';
+const supabaseAdmin = getSupabaseAdmin();
 import { normalizeAnswerStrict, isExactAnswer } from '../../../shared/lib/normalizeAnswer.js';
 
 export async function saveSubmission({ attemptId, questionId, responseText, timeMs = null }) {

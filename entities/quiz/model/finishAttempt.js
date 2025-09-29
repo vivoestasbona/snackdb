@@ -1,4 +1,5 @@
-﻿import supabaseAdmin from '../../../shared/api/supabaseAdmin.js';
+﻿import { getSupabaseAdmin } from '../../../shared/api/supabaseAdmin.js';
+const supabaseAdmin = getSupabaseAdmin();
 
 function genShareCode(len = 8) {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 0/O,1/I 제외

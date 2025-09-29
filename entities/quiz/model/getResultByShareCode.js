@@ -1,4 +1,5 @@
-﻿import supabaseAdmin from '../../../shared/api/supabaseAdmin.js';
+﻿import { getSupabaseAdmin } from '../../../shared/api/supabaseAdmin.js';
+const supabaseAdmin = getSupabaseAdmin();
 
 export async function getResultByShareCode(shareCode) {
   if (!shareCode) throw new Error('getResultByShareCode: shareCode is required');
