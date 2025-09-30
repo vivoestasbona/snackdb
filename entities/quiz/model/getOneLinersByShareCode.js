@@ -6,7 +6,7 @@ export async function getOneLinersByShareCode(shareCode, { limit = 20, cursor = 
 
   let q = supabaseAdmin
     .from('quiz_one_liners')
-    .select('id, content, created_at', { count: 'exact' })
+    .select('id, content, created_at, author_id', { count: 'exact' })
     .eq('share_code', shareCode)
     .eq('is_hidden', false)
     .order('created_at', { ascending: false })
