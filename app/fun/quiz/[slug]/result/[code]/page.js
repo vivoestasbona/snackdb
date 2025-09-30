@@ -1,5 +1,6 @@
 import { redirect, notFound } from 'next/navigation';
-import ResultSummary from '../../../../../../entities/quiz/ui/ResultSummary.jsx';
+import QuizResultPanel from '../../../../../../widgets/quiz/QuizResultPanel.jsx';
+import OneLinersBox from '../../../../../../features/quiz-result/ui/OneLinersBox.jsx';
 import { getResultByShareCode } from '../../../../../../entities/quiz/model/getResultByShareCode.js';
 
 export default async function QuizResultPage({ params }) {
@@ -20,14 +21,14 @@ export default async function QuizResultPage({ params }) {
 
   return (
     <main style={{ maxWidth: 720, margin: '32px auto', padding: '0 16px', display: 'grid', gap: 16 }}>
-      <ResultSummary
+      <QuizResultPanel
         title={result.title}
         slug={result.slug}
         totalCorrect={result.total_correct}
         totalQuestions={result.total_questions}
         shareUrl={shareUrl}
+        oneLinersSlot={<OneLinersBox shareCode={result.share_code} />}
       />
-      {/* 한줄평 영역은 다음 파트에서 연결 */}
     </main>
   );
 }
