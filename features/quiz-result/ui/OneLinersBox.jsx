@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
-import Link from 'next/link';
+import LoginModal from '../../../entities/user/ui/LoginModal.jsx';
 
 export default function OneLinersBox({ shareCode }) {
   const [items, setItems] = useState([]);
   const [canPost, setCanPost] = useState(false);
   const [value, setValue] = useState('');
   const [pending, startTransition] = useTransition();
+  const [showLogin, setShowLogin] = useState(false);
 
   async function load() {
     const res = await fetch(`/api/quiz/one-liners?code=${encodeURIComponent(shareCode)}&limit=30`, { cache: 'no-store' });
@@ -19,7 +20,30 @@ export default function OneLinersBox({ shareCode }) {
     }
   }
 
-  useEffect(() => { load(); /*eslint-disable-next-line*/ }, [shareCode]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [shareCode]);
+
+  async function onSubmit(e) {
+    e.preventDefault();
+
+    if (!canPost) { setShowLogin(true); return; }
+
+    const text = value.trim();
+    if (!text) return;
+
+    const res = await fetch('/api/quiz/one-liners', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: shareCode, content: text }),
+    });
+
+    if (!res.ok) return console.error('one-liner post failed');
+
+    const json = await res.json().catch(() => ({}));
+    if (json.ok && json.item) {
+      setValue('');
+      setItems((prev) => [json.item, ...prev]); // 낙관적 prepend
+    }
+  }
 
   async function onDelete(id) {
     if (!id) return;
@@ -36,51 +60,30 @@ export default function OneLinersBox({ shareCode }) {
     }
   }
 
-  async function onSubmit(e) {
-    e.preventDefault();
-    if (!canPost) return; // 방어
-    const text = value.trim();
-    if (!text) return;
-    const res = await fetch('/api/quiz/one-liners', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: shareCode, content: text }),
-    });
-    if (!res.ok) return console.error('one-liner post failed');
-    const json = await res.json().catch(() => ({}));
-    if (json.ok && json.item) {
-      setValue('');
-      // 낙관적 prepend
-      setItems((prev) => [json.item, ...prev]);
-    }
-  }
+  const inputStyle = { flex: 1, padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 8 };
 
   return (
     <div style={{ display: 'grid', gap: 8 }}>
-      {canPost ? (
-        <form onSubmit={onSubmit} style={{ display: 'flex', gap: 8 }}>
-          <input
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            placeholder="한줄평을 남겨주세요 (최대 200자)"
-            maxLength={200}
-            style={{ flex: 1, padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 8 }}
-          />
-          <button
-            type="submit"
-            disabled={pending || !value.trim()}
-            style={{ padding: '10px 14px', border: '1px solid #e5e7eb', borderRadius: 8 }}
-          >
-            등록
-          </button>
-        </form>
-      ) : (
-        <div style={{ padding: 12, border: '1px solid #e5e7eb', borderRadius: 8, background: '#F9FAFB' }}>
-          댓글은 로그인한 회원만 작성할 수 있어요.{' '}
-          <Link href="/account" style={{ textDecoration: 'underline' }}>로그인 하러 가기</Link>
-        </div>
-      )}
+      {/* 입력폼은 항상 보이게 */}
+      <form onSubmit={onSubmit} style={{ display: 'flex', gap: 8 }}>
+        <input
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="한줄평을 남겨주세요 (최대 200자)"
+          maxLength={200}
+          style={inputStyle}
+        />
+        <button
+          type="submit"
+          // 로그인 여부와 무관하게 버튼은 활성화(누르면 모달 열림)
+          disabled={pending || !value.trim()}
+          style={{ padding: '10px 14px', border: '1px solid #e5e7eb', borderRadius: 8 }}
+        >
+          등록
+        </button>
+      </form>
 
+      {/* 목록 */}
       <div style={{ display: 'grid', gap: 8 }}>
         {items.length === 0 ? (
           <div style={{ color: '#9CA3AF', fontSize: 14 }}>아직 한줄평이 없습니다.</div>
@@ -117,6 +120,13 @@ export default function OneLinersBox({ shareCode }) {
           ))
         )}
       </div>
+
+      {/* 로그인 모달: 닫힐 때 상태 리프레시 */}
+      <LoginModal
+        open={showLogin}
+        onClose={() => setShowLogin(false)}
+        onSuccess={() => { setShowLogin(false); startTransition(load); }}
+        />
     </div>
   );
 }
