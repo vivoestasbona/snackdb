@@ -17,7 +17,7 @@ export async function GET(req) {
     if (!code) return NextResponse.json({ ok: false, error: 'code required' }, { status: 400 });
 
     // 내 유저 ID (있으면 본인 댓글 삭제 버튼 노출)
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const supa = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
@@ -80,7 +80,7 @@ export async function POST(req) {
     const { code, content } = body;
     if (!code) return NextResponse.json({ ok: false, error: 'code required' }, { status: 400 });
     // 요청 쿠키로 SSR 클라이언트 생성 → 현재 로그인 사용자 "필수"
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const supa = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
@@ -100,15 +100,14 @@ export async function POST(req) {
     }
 
     const row = await addOneLiner({ shareCode: code, content, authorId });
-
-    // 작성 직후 응답도 표시용 필드를 합성해 돌려주기
-    let author_display_name = '익명';
-    const { data: p } = await supabaseAdmin
+    // 작성자 표시 + role 확인(관리자면 어떤 댓글이든 삭제 가능)
+    const { data: prof } = await supabaseAdmin
       .from('profiles')
-      .select('display_name')
+      .select('display_name, role')
       .eq('id', authorId)
       .single();
-    author_display_name = p?.display_name || '익명';
+    const author_display_name = prof?.display_name || '익명';
+    const isAdmin = String(prof?.role || '').toLowerCase() === 'admin';
     
     const result = await getResultByShareCode(code).catch(() => null);
     const total_correct = result?.total_correct ?? null;
@@ -123,6 +122,7 @@ export async function POST(req) {
         author_display_name,
         total_correct,
         total_questions,
+        can_delete: true || isAdmin, // 방금 쓴 본인 댓글이므로 true, (관리자일 경우도 당연히 true)
       },
     });
   } catch (e) {

@@ -12,7 +12,7 @@ export async function POST(req) {
     if (!id) return NextResponse.json({ ok: false, error: 'id required' }, { status: 400 });
 
     // 요청 쿠키로 로그인 유저 식별
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const supa = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
