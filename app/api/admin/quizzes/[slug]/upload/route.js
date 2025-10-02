@@ -37,9 +37,11 @@ export async function POST(req, { params }) {
     }
 
     const ext = (file.name?.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
-    const safeOrder = (order || 'new').replace(/[^a-z0-9_-]/gi, '');
-    // 업로드 대상 경로(버킷 내부 경로)
-    const objectPath = `${slug}/q-${safeOrder}.${ext}`;
+    const safeOrder = (order || '').toString().replace(/[^a-z0-9_-]/gi, '');
+    // ✅ order가 없으면 항상 고유 키 사용(시간+랜덤)
+    const unique = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
+    const base = safeOrder ? `q-${safeOrder}` : `q-${unique}`;
+    const objectPath = `${slug}/${base}.${ext}`;
 
     const buf = Buffer.from(await file.arrayBuffer());
     const { data, error } = await supabaseAdmin
