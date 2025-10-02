@@ -13,12 +13,20 @@ export default function Home() {
       <p style={{margin:"0 0 24px", color:"#555"}}>
         과자 상세 페이지에서 평점과 한줄평을 확인해 보세요.
       </p>
-      <a href="/search" style={{
-        display:"inline-block", padding:"10px 16px", border:"1px solid #ddd",
-        borderRadius:10, textDecoration:"none", color:"#111", background:"#fff"
-      }}>
-        검색하러 가기 →
-      </a>
+      <div style={{display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap"}}>
+        <a href="/search" style={{
+          display:"inline-block", padding:"10px 16px", border:"1px solid #ddd",
+          borderRadius:10, textDecoration:"none", color:"#111", background:"#fff"
+        }}>
+          🔍검색 →
+        </a>
+        <a href="/fun/quiz" style={{
+          display:"inline-block", padding:"10px 16px", border:"1px solid #ddd",
+          borderRadius:10, textDecoration:"none", color:"#111", background:"#fff"
+        }}>
+          🎮 퀴즈  →
+        </a>
+      </div>
     </section>
   );
 }
