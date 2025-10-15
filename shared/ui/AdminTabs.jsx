@@ -11,6 +11,7 @@ export default function AdminTabs() {
   // 기본 인터페이스를 과자별 보기로: /admin/requests
   const items = [
     { href: "/admin/snacks",            label: "과자 관리" },
+    { href: "/admin/quizzes",           label: "퀴즈 관리" },
     { href: "/admin/requests",          label: "수정요청 관리" },
   ];
 

@@ -7,18 +7,19 @@ import AdminTabs from "@shared/ui/AdminTabs";
 export const metadata = { title: "Admin • SnackDB" };
 
 export default async function AdminLayout({ children }) {
-  const cookieStore = await cookies();
+  const cookieStore = await cookies()
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {
       cookies: {
         get: (name) => cookieStore.get(name)?.value,
-        set: async (name, value, options) => cookieStore.set({ name, value, ...options }),
-        remove: async (name, options) => cookieStore.set({ name, value: "", ...options }),
+        // RSC에서는 쿠키 수정 금지 → no-op으로 넘김
+        set: () => {},
+        remove: () => {},
       },
     }
-  );
+  )
 
   // 1) 로그인 확인
   const { data: { user } } = await supabase.auth.getUser();
