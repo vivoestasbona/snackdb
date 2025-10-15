@@ -18,13 +18,13 @@ export default function Home() {
           display:"inline-block", padding:"10px 16px", border:"1px solid #ddd",
           borderRadius:10, textDecoration:"none", color:"#111", background:"#fff"
         }}>
-          🔍검색 →
+          🔍 검색 →
         </a>
         <a href="/fun/quiz" style={{
           display:"inline-block", padding:"10px 16px", border:"1px solid #ddd",
           borderRadius:10, textDecoration:"none", color:"#111", background:"#fff"
         }}>
-          🎮 퀴즈  →
+          🎮 퀴즈 →
         </a>
       </div>
     </section>
