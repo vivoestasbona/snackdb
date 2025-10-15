@@ -9,7 +9,7 @@ export default async function QuizListPage() {
   const { data: rows = [], error } = await supa
     .from('quizzes')
     .select('slug, title, description')
-    .eq('status', 'published')
+    .eq('is_published', true)
     .eq('visibility', 'public')
     .order('created_at', { ascending: false })
     .limit(50);

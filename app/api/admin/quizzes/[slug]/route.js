@@ -34,7 +34,7 @@ export async function PATCH(req, { params }) {
     if (!auth.ok) return NextResponse.json({ ok:false, error:auth.error }, { status:auth.status });
 
     const body = await req.json().catch(() => ({}));
-    const { title, description } = body;
+    const { title, description, new_slug } = body;
     if (!title && typeof description !== 'string') {
       return NextResponse.json({ ok:false, error:'nothing to update' }, { status:400 });
     }
@@ -43,6 +43,29 @@ export async function PATCH(req, { params }) {
     const payload = {};
     if (typeof title === 'string') payload.title = title;  
     if (typeof description === 'string') payload.description = description;
+
+    // 슬러그 변경 유효성 체크(소문자/숫자/하이픈, 길이 3~64 예시)
+    if (typeof new_slug === 'string' && new_slug && new_slug !== slug) {
+        const ns = new_slug.trim().toLowerCase();
+        if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(ns) || ns.length < 3 || ns.length > 64) {
+        return NextResponse.json({ ok:false, error:'invalid new_slug' }, { status:400 });
+        }
+        // 중복 체크
+        const { data: exists } = await supabaseAdmin
+        .from('quizzes').select('slug').eq('slug', ns).maybeSingle();
+        if (exists) {
+        return NextResponse.json({ ok:false, error:'slug already exists' }, { status:409 });
+        }
+        // 1) quizzes.slug 업데이트
+        const { error: upErr } = await supabaseAdmin
+        .from('quizzes').update({ slug: ns }).eq('id', quiz.id);
+        if (upErr) throw new Error(upErr.message);
+        // 2) 리다이렉트 매핑 upsert(옛 → 새)
+        await supabaseAdmin.from('quiz_slug_redirects')
+        .upsert({ from_slug: slug, to_slug: ns }, { onConflict: 'from_slug' });
+        // 이후 응답에 newSlug를 담아 클라이언트가 페이지 이동하도록
+        return NextResponse.json({ ok:true, newSlug: ns });
+    }
 
     const { error } = await supabaseAdmin.from('quizzes').update(payload).eq('id', quiz.id);
     if (error) throw new Error(error.message);

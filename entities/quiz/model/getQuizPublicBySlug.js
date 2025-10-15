@@ -15,10 +15,19 @@ export async function getQuizPublicBySlug(slug) {
       'id, slug, title, description, template, template_config, status, visibility, requires_login, published_at'
     )
     .eq('slug', slug)
-    .eq('status', 'published')
+    .eq('is_published', true)
     .in('visibility', ['public', 'unlisted'])
     .maybeSingle(); // 없으면 null, 있으면 1건
 
-  if (error) throw new Error(`getQuizPublicBySlug supabase error: ${error.message}`);
-  return data; // null | { id, slug, ... }
+  if (data) return { data };
+  // 없으면 리다이렉트 매핑 확인
+  const { data: redir } = await supabaseAdmin
+    .from('quiz_slug_redirects')
+    .select('to_slug')
+    .eq('from_slug', slug)
+    .maybeSingle();
+  if (redir?.to_slug) {
+    return { redirect_to: `/fun/quiz/${redir.to_slug}` };
+  }
+  return { data: null, error };
 }

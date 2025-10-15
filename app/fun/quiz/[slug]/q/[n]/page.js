@@ -11,10 +11,12 @@ function toPublicUrl(storagePath) {
 }
 
 export default async function QuizQuestionPage({ params }) {
-  const { slug, n } = (await params) ?? {};
+  const { slug, n } = (await params) ?? {};          
   if (!slug) notFound();
 
-  const meta = await getQuizPublicBySlug(slug).catch(() => null);
+  // getQuizPublicBySlug는 { data, redirect_to } 형태를 반환합니다.
+  const { data: meta, redirect_to } = await getQuizPublicBySlug(slug).catch(() => ({}));
+  if (redirect_to) redirect(redirect_to);
   if (!meta) notFound();
 
   const questions = await getQuestionsPublic(meta.id);

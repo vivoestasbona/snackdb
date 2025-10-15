@@ -1,5 +1,5 @@
 // app/fun/quiz/[slug]/page.js
-import { notFound } from 'next/navigation';
+import { redirect, notFound } from 'next/navigation';
 import QuizStartSection from '../../../../widgets/quiz/QuizStartSection.jsx';
 import { getQuizPublicBySlug } from '../../../../entities/quiz/model/getQuizPublicBySlug.js';
 import { getQuestionsPublic } from '../../../../entities/quiz/model/getQuestionsPublic.js';
@@ -10,7 +10,8 @@ export default async function QuizStartPage({ params }) {
   if (!slug) notFound();
 
   // 공개 메타 조회(발행 + public/unlisted)
-  const meta = await getQuizPublicBySlug(slug).catch(() => null);
+  const { data: meta, redirect_to } = await getQuizPublicBySlug(slug).catch(() => ({}));
+  if (redirect_to) redirect(redirect_to);
   if (!meta) notFound();
 
   // 문항 수(정답 제외)

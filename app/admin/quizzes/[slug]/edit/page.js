@@ -1,6 +1,4 @@
 import QuizEditClient from '../../../../../features/quiz-admin/ui/QuizEditClient.jsx';
-import QuestionsList from '../../../../../features/quiz-admin/ui/QuestionsList.jsx';
-import QuestionCreate from '../../../../../features/quiz-admin/ui/QuestionCreate.jsx';
 import QuizMetaInlineEdit from '../../../../../features/quiz-admin/ui/QuizMetaInlineEdit.jsx';
 import { getSupabaseAdmin } from '../../../../../shared/api/supabaseAdmin.js';
 
